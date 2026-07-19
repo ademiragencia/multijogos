@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mini-Jogos • Arcade</title>
+  <meta name="description" content="Arcade web com uma coleção de jogos casuais: Jogo da Memória, Snake, 2048 e Quiz. Jogue direto no navegador." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕹️</text></svg>" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">🕹️</span>
+        <span>Mini<span class="grad">Jogos</span></span>
+      </div>
+    </header>
+
+    <section class="hero">
+      <h1>Escolha seu <span class="grad">jogo</span></h1>
+      <p>Uma coleção de jogos casuais para relaxar e desafiar sua mente. Tudo roda direto no navegador — sem instalar nada.</p>
+    </section>
+
+    <main class="games" id="games">
+      <a class="card" href="memoria.html">
+        <span class="tag">Clássico</span>
+        <span class="emoji">🧠</span>
+        <h3>Jogo da Memória</h3>
+        <p>Vire as cartas e encontre os pares no menor número de jogadas.</p>
+        <span class="play">Jogar &rarr;</span>
+      </a>
+
+      <a class="card" href="snake.html">
+        <span class="tag">Arcade</span>
+        <span class="emoji">🐍</span>
+        <h3>Snake</h3>
+        <p>Coma, cresça e não bata em si mesmo. Quão longe você chega?</p>
+        <span class="play">Jogar &rarr;</span>
+      </a>
+
+      <a class="card" href="2048.html">
+        <span class="tag">Puzzle</span>
+        <span class="emoji">🔢</span>
+        <h3>2048</h3>
+        <p>Deslize e combine os números até chegar à peça 2048.</p>
+        <span class="play">Jogar &rarr;</span>
+      </a>
+
+      <a class="card" href="quiz.html">
+        <span class="tag">Conhecimento</span>
+        <span class="emoji">❓</span>
+        <h3>Quiz Relâmpago</h3>
+        <p>Responda perguntas contra o tempo e faça a maior pontuação.</p>
+        <span class="play">Jogar &rarr;</span>
+      </a>
+    </main>
+
+    <footer class="foot">
+      <p>Feito com HTML, CSS e JavaScript puro • Use as setas ou o toque para jogar</p>
+    </footer>
+  </div>
+
+  <script>
+    // brilho que segue o cursor nos cards
+    document.querySelectorAll('.card').forEach(card => {
+      card.addEventListener('pointermove', e => {
+        const r = card.getBoundingClientRect();
+        card.style.setProperty('--mx', `${e.clientX - r.left}px`);
+        card.style.setProperty('--my', `${e.clientY - r.top}px`);
+      });
+    });
+  </script>
+</body>
+</html>

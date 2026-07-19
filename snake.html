@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Snake • Mini-Jogos</title>
+  <meta name="description" content="Snake: coma, cresça e não bata em si mesmo. Jogue com as setas ou o toque." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐍</text></svg>" />
+  <style>
+    .stage { position: relative; max-width: 460px; margin: 0 auto; }
+    canvas {
+      width: 100%;
+      aspect-ratio: 1;
+      background: var(--bg-2);
+      border-radius: 14px;
+      border: 1px solid var(--panel-border);
+      touch-action: none;
+      display: block;
+    }
+    .dpad {
+      display: none;
+      grid-template-columns: repeat(3, 60px);
+      grid-template-rows: repeat(3, 60px);
+      gap: 0.4rem;
+      justify-content: center;
+      margin: 1.4rem auto 0;
+      width: max-content;
+    }
+    .dpad button {
+      font-size: 1.4rem;
+      border-radius: 12px;
+      border: 1px solid var(--panel-border);
+      background: var(--panel);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .dpad button:active { background: var(--accent); color: #0d0b1f; }
+    .dpad .up { grid-area: 1 / 2; }
+    .dpad .left { grid-area: 2 / 1; }
+    .dpad .right { grid-area: 2 / 3; }
+    .dpad .down { grid-area: 3 / 2; }
+    @media (pointer: coarse) { .dpad { display: grid; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="topbar">
+      <div class="brand"><span class="logo">🐍</span><span>Mini<span class="grad">Jogos</span></span></div>
+      <a class="back-link" href="index.html">&larr; Voltar ao arcade</a>
+    </header>
+
+    <div class="game-head">
+      <h1>Snake</h1>
+      <p>Use as <strong>setas</strong>, <strong>WASD</strong> ou o D-pad. Coma as maçãs e cresça!</p>
+    </div>
+
+    <div class="hud">
+      <div class="stat"><span class="label">Pontos</span><span class="value" id="score">0</span></div>
+      <div class="stat"><span class="label">Recorde</span><span class="value" id="best">0</span></div>
+      <div class="stat"><span class="label">Velocidade</span><span class="value" id="lvl">1</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="stage">
+        <canvas id="canvas" width="400" height="400"></canvas>
+        <div class="overlay" id="overlay">
+          <div class="box">
+            <h2 id="ovtitle">🐍 Snake</h2>
+            <p id="ovtext">Pressione Iniciar ou uma seta para começar.</p>
+            <button class="btn" id="startBtn">Iniciar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="dpad">
+        <button class="up" data-dir="up" aria-label="Cima">▲</button>
+        <button class="left" data-dir="left" aria-label="Esquerda">◀</button>
+        <button class="right" data-dir="right" aria-label="Direita">▶</button>
+        <button class="down" data-dir="down" aria-label="Baixo">▼</button>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn ghost" id="pauseBtn">Pausar</button>
+      <a class="btn ghost" href="index.html">Outro jogo</a>
+    </div>
+
+    <footer class="foot"><p>Barra de espaço pausa o jogo.</p></footer>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const GRID = 20;                 // 20 x 20 células
+    const CELL = canvas.width / GRID;
+    const scoreEl = document.getElementById('score');
+    const bestEl = document.getElementById('best');
+    const lvlEl = document.getElementById('lvl');
+    const overlay = document.getElementById('overlay');
+    const ovTitle = document.getElementById('ovtitle');
+    const ovText = document.getElementById('ovtext');
+    const startBtn = document.getElementById('startBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const BEST_KEY = 'minijogos.snake.best';
+
+    let snake, dir, nextDir, food, score, speed, loop, running, paused;
+
+    bestEl.textContent = localStorage.getItem(BEST_KEY) || '0';
+
+    function reset() {
+      snake = [{ x: 9, y: 10 }, { x: 8, y: 10 }, { x: 7, y: 10 }];
+      dir = { x: 1, y: 0 };
+      nextDir = { x: 1, y: 0 };
+      score = 0;
+      speed = 130;
+      running = false;
+      paused = false;
+      scoreEl.textContent = '0';
+      lvlEl.textContent = '1';
+      placeFood();
+      draw();
+    }
+
+    function placeFood() {
+      do {
+        food = { x: (Math.random() * GRID) | 0, y: (Math.random() * GRID) | 0 };
+      } while (snake.some(s => s.x === food.x && s.y === food.y));
+    }
+
+    function start() {
+      if (running) return;
+      running = true; paused = false;
+      overlay.classList.remove('show');
+      clearInterval(loop);
+      loop = setInterval(tick, speed);
+    }
+
+    function tick() {
+      if (paused) return;
+      dir = nextDir;
+      const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+
+      if (head.x < 0 || head.y < 0 || head.x >= GRID || head.y >= GRID ||
+          snake.some(s => s.x === head.x && s.y === head.y)) {
+        return gameOver();
+      }
+
+      snake.unshift(head);
+
+      if (head.x === food.x && head.y === food.y) {
+        score += 10;
+        scoreEl.textContent = score;
+        placeFood();
+        // acelera a cada 50 pontos
+        const newSpeed = Math.max(60, 130 - Math.floor(score / 50) * 12);
+        if (newSpeed !== speed) {
+          speed = newSpeed;
+          lvlEl.textContent = Math.floor((130 - speed) / 12) + 1;
+          clearInterval(loop);
+          loop = setInterval(tick, speed);
+        }
+      } else {
+        snake.pop();
+      }
+      draw();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // grade sutil
+      ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+      ctx.lineWidth = 1;
+      for (let i = 1; i < GRID; i++) {
+        ctx.beginPath(); ctx.moveTo(i * CELL, 0); ctx.lineTo(i * CELL, canvas.height); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, i * CELL); ctx.lineTo(canvas.width, i * CELL); ctx.stroke();
+      }
+      // maçã
+      ctx.font = `${CELL}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('🍎', food.x * CELL + CELL / 2, food.y * CELL + CELL / 2 + 1);
+      // cobra
+      snake.forEach((s, i) => {
+        const t = i / snake.length;
+        ctx.fillStyle = i === 0 ? '#34e0a1' : `rgba(124,92,255,${1 - t * 0.55})`;
+        roundRect(s.x * CELL + 1, s.y * CELL + 1, CELL - 2, CELL - 2, 5);
+        ctx.fill();
+      });
+    }
+
+    function roundRect(x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    function gameOver() {
+      clearInterval(loop);
+      running = false;
+      const best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10);
+      let extra = '';
+      if (score > best) { localStorage.setItem(BEST_KEY, score); bestEl.textContent = score; extra = ' 🏆 Novo recorde!'; }
+      ovTitle.textContent = '💥 Fim de jogo';
+      ovText.textContent = `Você fez ${score} pontos.${extra}`;
+      startBtn.textContent = 'Jogar de novo';
+      overlay.classList.add('show');
+      reset();
+    }
+
+    function setDir(x, y) {
+      // impede inversão direta
+      if (dir.x === -x && dir.y === -y) return;
+      nextDir = { x, y };
+      if (!running) start();
+    }
+
+    const KEYS = {
+      ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+      w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
+      W: [0, -1], S: [0, 1], A: [-1, 0], D: [1, 0]
+    };
+    window.addEventListener('keydown', e => {
+      if (e.key === ' ') { e.preventDefault(); togglePause(); return; }
+      const k = KEYS[e.key];
+      if (k) { e.preventDefault(); setDir(k[0], k[1]); }
+    });
+
+    const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+    document.querySelectorAll('.dpad button').forEach(b => {
+      b.addEventListener('click', () => { const d = DIRS[b.dataset.dir]; setDir(d[0], d[1]); });
+    });
+
+    // swipe no canvas
+    let touchStart = null;
+    canvas.addEventListener('touchstart', e => { touchStart = e.touches[0]; }, { passive: true });
+    canvas.addEventListener('touchmove', e => {
+      if (!touchStart) return;
+      const dx = e.touches[0].clientX - touchStart.clientX;
+      const dy = e.touches[0].clientY - touchStart.clientY;
+      if (Math.abs(dx) + Math.abs(dy) < 24) return;
+      if (Math.abs(dx) > Math.abs(dy)) setDir(dx > 0 ? 1 : -1, 0);
+      else setDir(0, dy > 0 ? 1 : -1);
+      touchStart = null;
+    }, { passive: true });
+
+    function togglePause() {
+      if (!running) return;
+      paused = !paused;
+      pauseBtn.textContent = paused ? 'Continuar' : 'Pausar';
+      if (paused) { ovTitle.textContent = '⏸ Pausado'; ovText.textContent = 'Pressione espaço para continuar.'; startBtn.textContent = 'Continuar'; overlay.classList.add('show'); }
+      else overlay.classList.remove('show');
+    }
+
+    startBtn.addEventListener('click', () => { if (paused) togglePause(); else start(); });
+    pauseBtn.addEventListener('click', togglePause);
+
+    reset();
+    overlay.classList.add('show'); // exibe a tela inicial com o botão Iniciar
+  </script>
+</body>
+</html>

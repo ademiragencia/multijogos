@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jogo da Memória • Mini-Jogos</title>
+  <meta name="description" content="Jogo da Memória: vire as cartas e encontre os pares no menor número de jogadas." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>" />
+  <style>
+    .board {
+      display: grid;
+      gap: clamp(0.4rem, 1.5vw, 0.8rem);
+      max-width: 520px;
+      margin: 0 auto;
+      perspective: 1000px;
+    }
+    .tile {
+      position: relative;
+      aspect-ratio: 1;
+      cursor: pointer;
+      transform-style: preserve-3d;
+      transition: transform 0.4s ease;
+      border-radius: 14px;
+    }
+    .tile.flipped, .tile.matched { transform: rotateY(180deg); }
+    .tile .face {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      backface-visibility: hidden;
+      font-size: clamp(1.6rem, 7vw, 2.6rem);
+      user-select: none;
+    }
+    .tile .front {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15);
+    }
+    .tile .front::after { content: "?"; font-weight: 800; color: rgba(255,255,255,0.75); }
+    .tile .back {
+      transform: rotateY(180deg);
+      background: var(--bg-2);
+      border: 1px solid var(--panel-border);
+    }
+    .tile.matched .back {
+      background: rgba(52, 224, 161, 0.14);
+      border-color: rgba(52, 224, 161, 0.5);
+      animation: pop 0.4s ease;
+    }
+    @keyframes pop { 50% { transform: rotateY(180deg) scale(1.08); } }
+    .tile.locked { pointer-events: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="topbar">
+      <div class="brand"><span class="logo">🧠</span><span>Mini<span class="grad">Jogos</span></span></div>
+      <a class="back-link" href="index.html">&larr; Voltar ao arcade</a>
+    </header>
+
+    <div class="game-head">
+      <h1>Jogo da Memória</h1>
+      <p>Encontre todos os pares com o menor número de jogadas.</p>
+    </div>
+
+    <div class="hud">
+      <div class="stat"><span class="label">Jogadas</span><span class="value" id="moves">0</span></div>
+      <div class="stat"><span class="label">Pares</span><span class="value" id="pairs">0/8</span></div>
+      <div class="stat"><span class="label">Tempo</span><span class="value" id="time">0s</span></div>
+      <div class="stat"><span class="label">Recorde</span><span class="value" id="best">—</span></div>
+    </div>
+
+    <div class="panel" style="position:relative;">
+      <div class="board" id="board"></div>
+      <div class="overlay" id="overlay">
+        <div class="box">
+          <h2>🎉 Você venceu!</h2>
+          <p id="result"></p>
+          <button class="btn" id="again">Jogar de novo</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn" id="restart">Reiniciar</button>
+      <a class="btn ghost" href="index.html">Outro jogo</a>
+    </div>
+
+    <footer class="foot"><p>Dica: memorize a posição das cartas que já foram viradas.</p></footer>
+  </div>
+
+  <script>
+    const EMOJIS = ["🍕","🚀","🎸","🐙","🌵","⚡","🍩","🦊"];
+    const board = document.getElementById('board');
+    const movesEl = document.getElementById('moves');
+    const pairsEl = document.getElementById('pairs');
+    const timeEl = document.getElementById('time');
+    const bestEl = document.getElementById('best');
+    const overlay = document.getElementById('overlay');
+    const resultEl = document.getElementById('result');
+
+    let deck = [], first = null, second = null, lock = false;
+    let moves = 0, matched = 0, seconds = 0, timer = null, started = false;
+
+    const BEST_KEY = 'minijogos.memoria.best';
+
+    function showBest() {
+      const b = localStorage.getItem(BEST_KEY);
+      bestEl.textContent = b ? `${b} jog.` : '—';
+    }
+
+    function shuffle(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function startTimer() {
+      if (started) return;
+      started = true;
+      timer = setInterval(() => { seconds++; timeEl.textContent = seconds + 's'; }, 1000);
+    }
+
+    function build() {
+      clearInterval(timer);
+      deck = shuffle([...EMOJIS, ...EMOJIS]);
+      first = second = null; lock = false;
+      moves = matched = seconds = 0; started = false;
+      movesEl.textContent = '0';
+      pairsEl.textContent = '0/8';
+      timeEl.textContent = '0s';
+      overlay.classList.remove('show');
+      const cols = 4;
+      board.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+      board.innerHTML = '';
+      deck.forEach((emoji, i) => {
+        const tile = document.createElement('div');
+        tile.className = 'tile';
+        tile.dataset.index = i;
+        tile.innerHTML = `<div class="face front"></div><div class="face back">${emoji}</div>`;
+        tile.addEventListener('click', () => flip(tile));
+        board.appendChild(tile);
+      });
+      showBest();
+    }
+
+    function flip(tile) {
+      if (lock || tile.classList.contains('flipped') || tile.classList.contains('matched')) return;
+      startTimer();
+      tile.classList.add('flipped');
+      if (!first) { first = tile; return; }
+      second = tile;
+      moves++; movesEl.textContent = moves;
+      lock = true;
+      const a = deck[first.dataset.index], b = deck[second.dataset.index];
+      if (a === b) {
+        setTimeout(() => {
+          first.classList.add('matched'); second.classList.add('matched');
+          matched++; pairsEl.textContent = `${matched}/8`;
+          resetPick();
+          if (matched === EMOJIS.length) win();
+        }, 350);
+      } else {
+        setTimeout(() => {
+          first.classList.remove('flipped'); second.classList.remove('flipped');
+          resetPick();
+        }, 800);
+      }
+    }
+
+    function resetPick() { first = second = null; lock = false; }
+
+    function win() {
+      clearInterval(timer);
+      const prev = parseInt(localStorage.getItem(BEST_KEY) || '0', 10);
+      let recorde = '';
+      if (!prev || moves < prev) { localStorage.setItem(BEST_KEY, moves); recorde = ' 🏆 Novo recorde!'; }
+      resultEl.textContent = `${moves} jogadas em ${seconds}s.${recorde}`;
+      overlay.classList.add('show');
+      showBest();
+    }
+
+    document.getElementById('restart').addEventListener('click', build);
+    document.getElementById('again').addEventListener('click', build);
+    build();
+  </script>
+</body>
+</html>
