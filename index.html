@@ -2,135 +2,642 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mini-Jogos • Arcade</title>
-  <meta name="description" content="Arcade web: Corredor Infinito (runner realista instalável, fases infinitas), o platformer Aventura Neon (5 fases + chefão) e jogos casuais. Jogue direto no navegador." />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Explorador 3D</title>
+  <meta name="description" content="Platformer 3D no navegador com fases infinitas procedurais, iluminação realista e câmera em 3ª pessoa." />
+  <meta name="theme-color" content="#0c1018" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕹️</text></svg>" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧗</text></svg>" />
   <style>
-    .feature {
-      position: relative; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 1.5rem;
-      margin-bottom: 1.6rem; padding: clamp(1.4rem, 4vw, 2.2rem);
-      border-radius: var(--radius); overflow: hidden; isolation: isolate;
-      border: 1px solid rgba(124,92,255,.45);
-      background:
-        radial-gradient(600px 200px at 100% 0%, rgba(34,211,238,.18), transparent 60%),
-        radial-gradient(500px 260px at 0% 100%, rgba(255,92,152,.20), transparent 60%),
-        var(--panel);
-      transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
-    }
-    .feature:hover { transform: translateY(-4px); box-shadow: var(--shadow); border-color: var(--accent); }
-    .feature .badge {
-      display: inline-flex; align-items: center; gap: .4rem; font-size: .72rem; font-weight: 700;
-      text-transform: uppercase; letter-spacing: .08em; color: var(--accent-2);
-      padding: .3rem .7rem; border-radius: 999px; background: rgba(124,92,255,.15);
-      border: 1px solid rgba(124,92,255,.35); margin-bottom: .8rem;
-    }
-    .feature h2 { font-size: clamp(1.6rem, 5vw, 2.3rem); font-weight: 800; letter-spacing: -.02em; line-height: 1.1; }
-    .feature h2 .grad { background: linear-gradient(90deg, var(--accent-2), var(--accent-3)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
-    .feature p { color: var(--muted); margin: .5rem 0 1.1rem; max-width: 48ch; }
-    .feature .cta { display: inline-flex; align-items: center; gap: .5rem; font-weight: 700; padding: .7rem 1.4rem;
-      border-radius: 999px; color: #0d0b1f; background: linear-gradient(135deg, var(--accent-2), var(--accent));
-      box-shadow: 0 8px 20px rgba(124,92,255,.4); }
-    .feature .art { font-size: clamp(3.5rem, 12vw, 6rem); filter: drop-shadow(0 10px 20px rgba(0,0,0,.5)); }
-    @media (max-width: 620px) { .feature { grid-template-columns: 1fr; } .feature .art { display: none; } }
+    :root{ --text:#eef3ff; --muted:#a7b4cc; --accent:#4ade80; --accent2:#38bdf8; --danger:#ff6b6b;
+           --border:rgba(255,255,255,.12); --panel:rgba(12,16,24,.6); --font:"Poppins","Segoe UI",system-ui,sans-serif; }
+    *{ box-sizing:border-box; margin:0; padding:0; }
+    html,body{ height:100%; overflow:hidden; background:#0c1018; }
+    body{ font-family:var(--font); color:var(--text); touch-action:none; user-select:none; -webkit-user-select:none; }
+    #app{ position:fixed; inset:0; }
+    canvas{ display:block; width:100%; height:100%; }
+
+    .hud{ position:absolute; inset:0 0 auto 0; z-index:4; display:flex; justify-content:space-between; align-items:flex-start;
+          padding:calc(env(safe-area-inset-top) + 14px) 18px 0; pointer-events:none; text-shadow:0 2px 10px rgba(0,0,0,.6); }
+    .hud .col{ display:flex; flex-direction:column; gap:3px; }
+    .hud .right{ align-items:flex-end; }
+    .phase{ font-size:clamp(1.1rem,4vw,1.5rem); font-weight:800; letter-spacing:-.02em; }
+    .biome{ font-size:.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:.12em; font-weight:600; }
+    .chip{ font-size:1rem; font-weight:700; font-variant-numeric:tabular-nums; display:inline-flex; gap:6px; align-items:center; }
+    .hearts{ font-size:1.05rem; letter-spacing:2px; margin-top:2px; }
+    .mutebtn,.pausebtn{ pointer-events:auto; cursor:pointer; width:34px; height:34px; border-radius:10px; border:1px solid var(--border);
+      background:rgba(12,16,24,.5); color:var(--text); display:grid; place-items:center; font-size:1rem; margin-top:6px; }
+
+    /* toque */
+    .stick{ position:absolute; left:0; bottom:0; width:45%; height:55%; z-index:3; touch-action:none; }
+    .stick .base{ position:absolute; width:120px; height:120px; border-radius:50%; border:2px solid rgba(255,255,255,.18);
+      background:rgba(255,255,255,.05); left:40px; bottom:calc(env(safe-area-inset-bottom) + 40px); display:none; }
+    .stick .knob{ position:absolute; width:56px; height:56px; border-radius:50%; background:rgba(255,255,255,.28); border:1px solid rgba(255,255,255,.4); display:none; }
+    .jumpbtn{ position:absolute; right:calc(env(safe-area-inset-right) + 34px); bottom:calc(env(safe-area-inset-bottom) + 54px); z-index:4;
+      width:88px; height:88px; border-radius:50%; border:1px solid var(--border); background:rgba(74,222,128,.22);
+      color:#04140c; font-weight:800; font-size:1rem; display:none; place-items:center; touch-action:none; backdrop-filter:blur(4px); }
+    .jumpbtn:active{ background:rgba(74,222,128,.5); }
+    @media (pointer:coarse){ .jumpbtn{ display:grid; } }
+
+    .banner{ position:absolute; top:22%; left:50%; transform:translateX(-50%) translateY(-8px); z-index:5; opacity:0;
+      font-size:clamp(1.4rem,6vw,2.4rem); font-weight:800; letter-spacing:-.02em; text-shadow:0 4px 20px rgba(0,0,0,.6);
+      transition:opacity .3s, transform .3s; pointer-events:none; text-align:center; }
+    .banner.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+    .banner .g{ background:linear-gradient(90deg,var(--accent2),var(--accent)); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+
+    .screen{ position:absolute; inset:0; z-index:8; display:none; place-items:center; text-align:center; padding:24px;
+      background:rgba(8,11,17,.8); backdrop-filter:blur(9px); }
+    .screen.show{ display:grid; animation:fade .3s ease; }
+    @keyframes fade{ from{opacity:0;} }
+    .box{ max-width:460px; }
+    .box h1{ font-size:clamp(2rem,9vw,3.4rem); font-weight:800; letter-spacing:-.03em; line-height:1.03; margin-bottom:.4rem; }
+    .box h1 .g,.box h2 .g{ background:linear-gradient(90deg,var(--accent2),var(--accent)); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+    .box h2{ font-size:clamp(1.6rem,7vw,2.4rem); font-weight:800; margin-bottom:.4rem; }
+    .box p{ color:var(--muted); margin-bottom:1.3rem; line-height:1.55; }
+    .btn{ cursor:pointer; font-family:inherit; font-weight:700; font-size:1.05rem; padding:.9rem 1.8rem; border:none; border-radius:999px;
+      color:#04140c; background:linear-gradient(135deg,var(--accent2),var(--accent)); box-shadow:0 10px 26px rgba(56,189,248,.35); transition:transform .15s; margin:.3rem; }
+    .btn:active{ transform:scale(.96); }
+    .btn.ghost{ color:var(--text); background:transparent; border:1px solid var(--border); box-shadow:none; }
+    .stat-row{ display:flex; justify-content:center; gap:1.8rem; margin-bottom:1.2rem; }
+    .stat-row b{ display:block; font-size:1.7rem; font-variant-numeric:tabular-nums; } .stat-row span{ font-size:.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+    .help{ font-size:.85rem; color:var(--muted); margin-top:1rem; line-height:1.8; }
+    .kc{ display:inline-block; padding:.05rem .5rem; border:1px solid var(--border); border-radius:6px; font-weight:700; font-size:.78rem; }
+    .loader{ position:absolute; inset:0; z-index:9; display:grid; place-items:center; background:#0c1018; color:var(--muted); font-weight:600; }
+    .spin{ width:42px; height:42px; border-radius:50%; border:3px solid rgba(255,255,255,.15); border-top-color:var(--accent2); animation:sp 1s linear infinite; margin:0 auto 14px; }
+    @keyframes sp{ to{ transform:rotate(360deg); } }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header class="topbar">
-      <div class="brand">
-        <span class="logo">🕹️</span>
-        <span>Mini<span class="grad">Jogos</span></span>
+  <div id="app">
+    <div class="hud">
+      <div class="col">
+        <span class="phase" id="phase">Fase 1</span>
+        <span class="biome" id="biome">—</span>
       </div>
-    </header>
-
-    <section class="hero">
-      <h1>Escolha seu <span class="grad">jogo</span></h1>
-      <p>Uma coleção de jogos casuais para relaxar e desafiar sua mente. Tudo roda direto no navegador — sem instalar nada.</p>
-    </section>
-
-    <a class="feature" href="aventura3d/index.html">
-      <div>
-        <span class="badge">🎮 Novo • 3D • Instalável</span>
-        <h2>Explorador <span class="grad">3D</span></h2>
-        <p>Um platformer <strong>3D de verdade</strong> (WebGL): câmera em 3ª pessoa, iluminação com sombras e <strong>fases infinitas</strong> geradas na hora por biomas (campos, deserto, neve, vulcão, floresta noturna). Salte entre plataformas e colete cristais. <strong>Instala como app.</strong></p>
-        <span class="cta">Jogar agora &rarr;</span>
+      <div class="col right">
+        <span class="chip">💎 <span id="coins">0</span></span>
+        <span class="chip" style="font-size:.85rem;color:var(--muted)">📏 <span id="dist">0</span> m</span>
+        <span class="hearts" id="hearts">❤❤❤</span>
+        <div style="display:flex;gap:6px">
+          <button class="mutebtn" id="mute">🔊</button>
+          <button class="pausebtn" id="pause">⏸</button>
+        </div>
       </div>
-      <div class="art">🧗</div>
-    </a>
+    </div>
 
-    <a class="feature" href="corrida/index.html">
-      <div>
-        <span class="badge">🏆 Runner • Instalável no celular</span>
-        <h2>Corredor <span class="grad">Infinito</span></h2>
-        <p>Corra por cenários realistas — cidade, floresta, chuva, deserto e neve — em <strong>fases infinitas</strong> geradas na hora. Pule, deslize e vá cada vez mais longe. <strong>Instala como app</strong> no seu celular!</p>
-        <span class="cta">Jogar agora &rarr;</span>
+    <div class="stick" id="stick"><div class="base" id="stickBase"></div><div class="knob" id="stickKnob"></div></div>
+    <div class="jumpbtn" id="jumpBtn">PULAR</div>
+
+    <div class="banner" id="banner"></div>
+
+    <div class="loader" id="loader"><div><div class="spin"></div>Carregando mundo 3D…</div></div>
+
+    <div class="screen" id="scrTitle">
+      <div class="box">
+        <h1>Explorador <span class="g">3D</span></h1>
+        <p>Um platformer 3D com fases infinitas geradas na hora, iluminação realista e câmera em 3ª pessoa. Salte entre plataformas, colete cristais e vá o mais longe que puder por biomas diferentes.</p>
+        <button class="btn" id="playBtn">▶ Jogar</button>
+        <button class="btn ghost" id="contBtn" style="display:none">Continuar (Fase <span id="contN">1</span>)</button>
+        <div class="help">
+          <span class="kc">W A S D</span> / setas mover &nbsp;•&nbsp; <span class="kc">Espaço</span> pular &nbsp;•&nbsp; <span class="kc">P</span> pausar<br>
+          No celular: <b>analógico</b> à esquerda, <b>PULAR</b> à direita
+        </div>
+        <button class="btn ghost" id="installBtn" style="display:none;margin-top:.6rem">📲 Instalar no celular</button>
       </div>
-      <div class="art">🏃</div>
-    </a>
+    </div>
 
-    <a class="feature" href="plataforma/index.html">
-      <div>
-        <span class="badge">✨ Destaque</span>
-        <h2>Aventura <span class="grad">Neon</span></h2>
-        <p>Um platformer de verdade: 5 fases, inimigos, moedas, plataformas móveis e um <strong>chefão final</strong>. Corra, pule e vença!</p>
-        <span class="cta">Jogar agora &rarr;</span>
+    <div class="screen" id="scrPause">
+      <div class="box"><h2>Pausado</h2>
+        <button class="btn" id="resumeBtn">Continuar</button>
+        <button class="btn ghost" id="menuBtn">Menu</button>
       </div>
-      <div class="art">🎮</div>
-    </a>
+    </div>
 
-    <main class="games" id="games">
-      <a class="card" href="memoria.html">
-        <span class="tag">Clássico</span>
-        <span class="emoji">🧠</span>
-        <h3>Jogo da Memória</h3>
-        <p>Vire as cartas e encontre os pares no menor número de jogadas.</p>
-        <span class="play">Jogar &rarr;</span>
-      </a>
-
-      <a class="card" href="snake.html">
-        <span class="tag">Arcade</span>
-        <span class="emoji">🐍</span>
-        <h3>Snake</h3>
-        <p>Coma, cresça e não bata em si mesmo. Quão longe você chega?</p>
-        <span class="play">Jogar &rarr;</span>
-      </a>
-
-      <a class="card" href="2048.html">
-        <span class="tag">Puzzle</span>
-        <span class="emoji">🔢</span>
-        <h3>2048</h3>
-        <p>Deslize e combine os números até chegar à peça 2048.</p>
-        <span class="play">Jogar &rarr;</span>
-      </a>
-
-      <a class="card" href="quiz.html">
-        <span class="tag">Conhecimento</span>
-        <span class="emoji">❓</span>
-        <h3>Quiz Relâmpago</h3>
-        <p>Responda perguntas contra o tempo e faça a maior pontuação.</p>
-        <span class="play">Jogar &rarr;</span>
-      </a>
-    </main>
-
-    <footer class="foot">
-      <p>Feito com HTML, CSS e JavaScript puro • Use as setas ou o toque para jogar</p>
-    </footer>
+    <div class="screen" id="scrOver">
+      <div class="box"><h2>💀 Você caiu no abismo</h2>
+        <div class="stat-row">
+          <div><b id="ovPhase">1</b><span>Fase</span></div>
+          <div><b id="ovDist">0</b><span>Metros</span></div>
+          <div><b id="ovCoins">0</b><span>Cristais</span></div>
+        </div>
+        <p id="ovBest"></p>
+        <button class="btn" id="retryBtn">Tentar de novo</button>
+        <button class="btn ghost" id="over2menu">Menu</button>
+      </div>
+    </div>
   </div>
 
+  <script src="vendor/three.min.js"></script>
   <script>
-    // brilho que segue o cursor nos cards
-    document.querySelectorAll('.card').forEach(card => {
-      card.addEventListener('pointermove', e => {
-        const r = card.getBoundingClientRect();
-        card.style.setProperty('--mx', `${e.clientX - r.left}px`);
-        card.style.setProperty('--my', `${e.clientY - r.top}px`);
-      });
-    });
+  "use strict";
+  /* =====================================================================
+     EXPLORADOR 3D — platformer 3D com fases infinitas procedurais
+     Three.js (WebGL). Personagem em 3ª pessoa, iluminação com sombras,
+     física própria e geração procedural de plataformas garantidamente
+     transponível. Avançar = sentido -Z.
+     ===================================================================== */
+  const THREE = window.THREE;
+  let renderer, scene, camera, sky, sun, hemi;
+  const clock = { last: performance.now() };
+
+  /* ---------- constantes de jogo ---------- */
+  const MOVE = 9.0, ACC = 60, AIR_ACC = 26, FRICTION = 42;
+  const JUMP_V = 10.2, GRAV = 26, MAX_FALL = 40, COYOTE = 0.11, JBUF = 0.12;
+  const KILL_Y = -22;
+  const STEP = 1/60;
+  // alcance do pulo (para a geração nunca exceder)
+  const AIRTIME = 2*JUMP_V/GRAV;                 // ~0.785 s
+  const REACH_Z = MOVE * AIRTIME * 0.82;         // ~5.8
+  const APEX = JUMP_V*JUMP_V/(2*GRAV);           // ~2.0
+
+  /* ---------- biomas ---------- */
+  const BIOMES = [
+    { name:"Campos", top:0x8fc6ff, bot:0xe7f3ff, fog:0xd6e8ff, sun:0xfff4d6, si:1.15, plat:0x6fae52, rock:0x8a8f99, foli:0x3f9d4d, decor:'tree',
+      grass:0.55, gBase:0x3f7a30, gTip:0x9ed86a, amb:{mode:'pollen',color:0xfff6c8,size:0.28,add:false}, birds:0x2b2b2b, bfly:true, clouds:true },
+    { name:"Deserto", top:0xf7c98a, bot:0xfff0cf, fog:0xf3d9a8, sun:0xfff0c0, si:1.3, plat:0xd9b06a, rock:0xbf9256, foli:0x7fae5a, decor:'cactus',
+      grass:0.12, gBase:0x9a7d3f, gTip:0xd8c070, amb:{mode:'dust',color:0xe8d3a0,size:0.3,add:false}, birds:0x3a3a3a, bfly:false, clouds:true },
+    { name:"Montanhas Nevadas", top:0xbcd7f0, bot:0xf2f8ff, fog:0xdaeafc, sun:0xffffff, si:1.2, plat:0xe6eef7, rock:0x9fb1c4, foli:0x5f8f6f, decor:'pine',
+      grass:0.0, amb:{mode:'snow',color:0xffffff,size:0.34,add:false}, birds:0x555555, bfly:false, clouds:true },
+    { name:"Terras Vulcânicas", top:0x3a1518, bot:0x7a2a20, fog:0x5a2018, sun:0xffb070, si:0.95, plat:0x4a3b3a, rock:0x2e2422, foli:0x6b2a1a, decor:'rock',
+      grass:0.0, amb:{mode:'ember',color:0xff8a3c,size:0.26,add:true}, birds:0, bfly:false, clouds:false },
+    { name:"Floresta Noturna", top:0x0e1a33, bot:0x24406b, fog:0x14233f, sun:0x9fc0ff, si:0.7, plat:0x2f5d3a, rock:0x394a55, foli:0x244a2e, decor:'pine',
+      grass:0.45, gBase:0x1c3a22, gTip:0x4a8a4f, amb:{mode:'firefly',color:0xbfff7a,size:0.3,add:true}, birds:0x101018, bfly:false, clouds:false },
+  ];
+  const biomeForPhase = n => BIOMES[Math.floor((n-1)/3) % BIOMES.length];
+
+  /* ---------- PRNG determinístico por fase ---------- */
+  function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)), lerp=(a,b,t)=>a+(b-a)*t;
+
+  /* ---------- estado ---------- */
+  const G = {
+    mode:'title', phase:1, biome:BIOMES[0],
+    player:null, playerMesh:null, legL:null, legR:null, armL:null, armR:null,
+    vel:new THREE.Vector3(), onGround:false, coyote:0, jbuf:0, jumps:0,
+    facing:0, runPhase:0, squash:1,
+    platforms:[], coins:[], decor:[], pool:[],
+    cursor:{x:0,y:0,z:0}, genZ:0, lastPlat:null, safe:new THREE.Vector3(0,0,0),
+    hearts:3, coinsN:0, dist:0, maxDist:0, rng:null,
+    banT:0,
+  };
+  const BEST='exp3d.best', PROG='exp3d.prog';
+  const input = { f:0, b:0, l:0, r:0, jumpEdge:false, jumpHeld:false };
+
+  /* ---------- áudio ---------- */
+  const Sfx=(()=>{ let ac=null,muted=false;
+    function rd(){ if(!ac){ try{ac=new(window.AudioContext||window.webkitAudioContext)();}catch(e){} } if(ac&&ac.state==='suspended')ac.resume(); }
+    function t(f,d,ty='sine',v=.1,to=null){ if(muted)return; rd(); if(!ac)return; const o=ac.createOscillator(),g=ac.createGain(); o.type=ty; o.frequency.setValueAtTime(f,ac.currentTime); if(to)o.frequency.exponentialRampToValueAtTime(to,ac.currentTime+d); g.gain.setValueAtTime(v,ac.currentTime); g.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+d); o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+d); }
+    return { jump(){t(420,.16,'square',.08,720);}, land(){t(160,.1,'sine',.07,90);}, coin(){t(900,.06,'sine',.1);setTimeout(()=>t(1350,.09,'sine',.1),55);},
+      hurt(){t(300,.3,'sawtooth',.12,90);}, phase(){[600,760,920,1180].forEach((f,i)=>setTimeout(()=>t(f,.16,'triangle',.1),i*90));},
+      over(){[420,320,220,150].forEach((f,i)=>setTimeout(()=>t(f,.24,'sawtooth',.1),i*140));}, toggle(){muted=!muted;rd();return muted;}, rd }; })();
+
+  /* ================= inicialização 3D ================= */
+  function initThree(){
+    const canvas = document.createElement('canvas');
+    document.getElementById('app').insertBefore(canvas, document.getElementById('app').firstChild);
+    renderer = new THREE.WebGLRenderer({ canvas, antialias:true, powerPreference:'high-performance' });
+    renderer.setPixelRatio(Math.min(devicePixelRatio||1, 2));
+    renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+
+    scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0xd6e8ff, 0.012);
+
+    camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 500);
+    camera.position.set(0, 6, 12);
+
+    // céu em gradiente (esfera invertida)
+    const skyGeo = new THREE.SphereGeometry(300, 24, 16);
+    const skyMat = new THREE.ShaderMaterial({ side:THREE.BackSide, uniforms:{ top:{value:new THREE.Color(0x8fc6ff)}, bot:{value:new THREE.Color(0xe7f3ff)} },
+      vertexShader:`varying vec3 vP; void main(){ vP=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+      fragmentShader:`uniform vec3 top,bot; varying vec3 vP; void main(){ float h=clamp((normalize(vP).y*.5+.5),0.,1.); gl_FragColor=vec4(mix(bot,top,pow(h,.8)),1.); }` });
+    sky = new THREE.Mesh(skyGeo, skyMat); scene.add(sky);
+
+    hemi = new THREE.HemisphereLight(0xbcd8ff, 0x556655, 0.8); scene.add(hemi);
+    sun = new THREE.DirectionalLight(0xfff4d6, 1.15);
+    sun.position.set(-18, 30, 8); sun.castShadow = true;
+    sun.shadow.mapSize.set(2048,2048);
+    const s=40; sun.shadow.camera.left=-s; sun.shadow.camera.right=s; sun.shadow.camera.top=s; sun.shadow.camera.bottom=-s;
+    sun.shadow.camera.near=1; sun.shadow.camera.far=120; sun.shadow.bias=-0.0004;
+    scene.add(sun); scene.add(sun.target);
+
+    buildPlayer();
+    addEventListener('resize', onResize); onResize();
+  }
+  function onResize(){ if(!renderer)return; camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); }
+
+  /* ---------- materiais utilitários ---------- */
+  const mat = (c,rough=0.9,metal=0.0,flat=true)=> new THREE.MeshStandardMaterial({ color:c, roughness:rough, metalness:metal, flatShading:flat });
+
+  /* ---------- personagem ---------- */
+  function buildPlayer(){
+    const g = new THREE.Group();
+    const skin=mat(0xe8b48c,.8), shirt=mat(0x38bdf8,.7), pants=mat(0x27324a,.8), shoe=mat(0x1a1f2b,.6), hair=mat(0x3a2a1e,.9);
+    const torso=new THREE.Mesh(new THREE.BoxGeometry(0.72,0.9,0.42), shirt); torso.position.y=1.5; torso.castShadow=true; g.add(torso);
+    const head=new THREE.Mesh(new THREE.SphereGeometry(0.34,16,12), skin); head.position.y=2.2; head.castShadow=true; g.add(head);
+    const hairM=new THREE.Mesh(new THREE.SphereGeometry(0.36,16,12,0,6.28,0,1.7), hair); hairM.position.y=2.24; g.add(hairM);
+    function limb(w,h,d,m,px,py){ const pivot=new THREE.Group(); pivot.position.set(px,py,0);
+      const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), m); mesh.position.y=-h/2; mesh.castShadow=true; pivot.add(mesh); g.add(pivot); return pivot; }
+    G.armL=limb(0.24,0.82,0.24,shirt,-0.5,1.9); G.armR=limb(0.24,0.82,0.24,shirt,0.5,1.9);
+    // mãos (pele) na ponta dos braços
+    [G.armL,G.armR].forEach(a=>{ const hnd=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.26,0.26),skin); hnd.position.y=-0.82; hnd.castShadow=true; a.add(hnd); });
+    G.legL=limb(0.3,0.95,0.32,pants,-0.2,1.05); G.legR=limb(0.3,0.95,0.32,pants,0.2,1.05);
+    [G.legL,G.legR].forEach(l=>{ const ft=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.2,0.5),shoe); ft.position.set(0,-1.0,0.08); ft.castShadow=true; l.add(ft); });
+    g.position.set(0,0,0);
+    scene.add(g); G.playerMesh=g;
+    G.player = new THREE.Vector3(0,0,0);   // pés (base) do personagem
+  }
+
+  /* ---------- geometria compartilhada ---------- */
+  const boxGeo = new THREE.BoxGeometry(1,1,1);
+  const coinGeo = new THREE.OctahedronGeometry(0.34, 0);
+  const coinMat = new THREE.MeshStandardMaterial({ color:0x67e8f9, emissive:0x1e9fb5, emissiveIntensity:.6, roughness:.25, metalness:.3, flatShading:true });
+
+  /* ===================== VIDA DO MUNDO ===================== */
+  let wind=0, grassMats=[], flock=[], bflies=[], ambient=null, clouds=[];
+  // grama: uma lâmina instanciada que balança ao vento no vertex shader
+  const BLADE = new THREE.PlaneGeometry(0.09, 0.55, 1, 3); BLADE.translate(0, 0.275, 0);
+  function grassMaterial(base,tip){
+    const m=new THREE.ShaderMaterial({ side:THREE.DoubleSide, uniforms:{ uT:{value:0}, cB:{value:new THREE.Color(base)}, cT:{value:new THREE.Color(tip)} },
+      vertexShader:`uniform float uT; varying float vY;
+        void main(){ vec4 wp=modelMatrix*instanceMatrix*vec4(position,1.0);
+          float t=clamp(position.y/0.55,0.,1.);
+          wp.x += sin(uT*1.7 + wp.x*0.55 + wp.z*0.5)*0.17*t*t;
+          wp.z += cos(uT*1.3 + wp.x*0.4)*0.10*t*t;
+          vY=t; gl_Position=projectionMatrix*viewMatrix*wp; }`,
+      fragmentShader:`uniform vec3 cB,cT; varying float vY; void main(){ gl_FragColor=vec4(mix(cB,cT,vY),1.0); }` });
+    grassMats.push(m); return m;
+  }
+  function addGrass(p){
+    const b=G.biome; if(!b.grass||!b._grassMat) return;
+    const n=Math.min(150, Math.floor(p.w*p.d*b.grass)); if(n<2) return;
+    const im=new THREE.InstancedMesh(BLADE, b._grassMat, n), d=new THREE.Object3D();
+    for(let i=0;i<n;i++){ d.position.set(p.x+(Math.random()*2-1)*(p.w/2-0.4), p.top, p.z+(Math.random()*2-1)*(p.d/2-0.4));
+      d.rotation.y=Math.random()*6.28; const s=0.7+Math.random()*0.8; d.scale.set(s,0.7+Math.random()*0.8,s); d.updateMatrix(); im.setMatrixAt(i,d.matrix); }
+    im.instanceMatrix.needsUpdate=true; im.frustumCulled=false; scene.add(im); p.grass=im;
+  }
+  // pássaros (revoada circulando o jogador)
+  function makeBird(){ const g=new THREE.Group(); const wg=new THREE.PlaneGeometry(0.95,0.3), m=new THREE.MeshBasicMaterial({color:0x222222,side:THREE.DoubleSide});
+    const L=new THREE.Mesh(wg,m),R=new THREE.Mesh(wg,m); L.position.x=-0.47; R.position.x=0.47; g.add(L,R); g.userData={L,R,mat:m}; return g; }
+  function initFlock(){ for(let i=0;i<8;i++){ const b=makeBird(); Object.assign(b.userData,{a:Math.random()*6.28,rad:7+Math.random()*11,sp:0.18+Math.random()*0.22,oy:Math.random()*4,flap:7+Math.random()*4,ph:Math.random()*6.28}); scene.add(b); flock.push(b);} }
+  function updateFlock(dt){ const col=G.biome.birds, vis=col!==0;
+    for(const b of flock){ b.visible=vis; if(!vis)continue; const u=b.userData; u.a+=dt*u.sp; u.ph+=dt*u.flap;
+      b.position.set(G.player.x+Math.cos(u.a)*u.rad, 13+u.oy+Math.sin(u.a*1.3)*1.6, G.player.z-6+Math.sin(u.a)*u.rad*0.6);
+      b.rotation.y=-u.a+Math.PI/2; const f=Math.sin(u.ph)*0.75; u.L.rotation.z=f; u.R.rotation.z=-f;
+      if(u.mat.color.getHex()!==col) u.mat.color.setHex(col); } }
+  // borboletas (só em biomas com bfly)
+  function makeBfly(){ const g=new THREE.Group(); const geo=new THREE.PlaneGeometry(0.24,0.32);
+    const cols=[0xff7ab5,0xffd54a,0x7ab5ff,0xff9d5c], m=new THREE.MeshBasicMaterial({color:cols[(Math.random()*cols.length)|0],side:THREE.DoubleSide});
+    const L=new THREE.Mesh(geo,m),R=new THREE.Mesh(geo,m); L.position.x=-0.13; R.position.x=0.13; g.add(L,R);
+    Object.assign(g.userData,{L,R,ph:Math.random()*6.28,ox:(Math.random()*2-1)*7,oy:1+Math.random()*3,oz:(Math.random()*2-1)*7,sp:0.8+Math.random()*1.0}); return g; }
+  function initBflies(){ for(let i=0;i<6;i++){ const b=makeBfly(); scene.add(b); bflies.push(b);} }
+  function updateBflies(dt,t){ const vis=!!G.biome.bfly; for(const b of bflies){ b.visible=vis; if(!vis)continue; const u=b.userData; u.ph+=dt*9;
+      b.position.set(G.player.x+u.ox+Math.sin(t*u.sp+u.ox)*1.6, G.player.y+u.oy+Math.sin(t*1.7+u.oz)*0.9, G.player.z+u.oz+Math.cos(t*u.sp)*1.6);
+      const f=Math.sin(u.ph)*1.15; u.L.rotation.y=f; u.R.rotation.y=-f; b.rotation.y=t*u.sp; } }
+  // partículas de ambiente (pólen / poeira / neve / brasas / vaga-lumes)
+  function initAmbient(){ const N=150, geo=new THREE.BufferGeometry(), pos=new Float32Array(N*3), off=new Float32Array(N*3);
+    for(let i=0;i<N;i++){ off[i*3]=(Math.random()*2-1)*16; off[i*3+1]=Math.random()*18-6; off[i*3+2]=(Math.random()*2-1)*16; }
+    geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+    const cvs=document.createElement('canvas'); cvs.width=cvs.height=32; const cx=cvs.getContext('2d');
+    const gr=cx.createRadialGradient(16,16,0,16,16,16); gr.addColorStop(0,'#fff'); gr.addColorStop(1,'rgba(255,255,255,0)'); cx.fillStyle=gr; cx.fillRect(0,0,32,32);
+    const tex=new THREE.CanvasTexture(cvs);
+    const matp=new THREE.PointsMaterial({ size:0.3, map:tex, transparent:true, depthWrite:false, sizeAttenuation:true });
+    ambient=new THREE.Points(geo,matp); ambient.frustumCulled=false; ambient.userData={N,pos:geo.attributes.position.array,off}; scene.add(ambient); }
+  function configAmbient(){ if(!ambient) return; const a=G.biome.amb; ambient.material.size=a.size; ambient.material.color.setHex(a.color);
+    ambient.material.blending=a.add?THREE.AdditiveBlending:THREE.NormalBlending; ambient.material.opacity=a.add?0.95:0.65; }
+  function updateAmbient(dt,t){ const u=ambient.userData,a=G.biome.amb,p=G.player,off=u.off,pos=u.pos,B=16;
+    for(let i=0;i<u.N;i++){ let ox=off[i*3],oy=off[i*3+1],oz=off[i*3+2];
+      if(a.mode==='snow'){ oy-=3*dt; ox+=Math.sin((oy+i)*0.6)*0.5*dt; }
+      else if(a.mode==='ember'){ oy+=2.2*dt; ox+=Math.sin(t+i)*0.4*dt; oz+=Math.cos(t+i)*0.3*dt; }
+      else if(a.mode==='firefly'){ ox+=Math.sin(t*0.8+i)*0.7*dt; oy+=Math.cos(t*0.9+i*1.3)*0.5*dt; oz+=Math.sin(t*0.7+i*0.7)*0.7*dt; }
+      else { ox+=(Math.sin(t*0.3+i)*0.3+0.25)*dt; oy+=Math.cos(t*0.4+i)*0.18*dt; }
+      if(ox>B)ox-=2*B; else if(ox<-B)ox+=2*B; if(oz>B)oz-=2*B; else if(oz<-B)oz+=2*B; if(oy>12)oy-=18; else if(oy<-6)oy+=18;
+      off[i*3]=ox; off[i*3+1]=oy; off[i*3+2]=oz;
+      pos[i*3]=p.x+ox; pos[i*3+1]=p.y+3+oy; pos[i*3+2]=p.z+oz; }
+    ambient.geometry.attributes.position.needsUpdate=true;
+    if(a.mode==='firefly') ambient.material.opacity=0.55+Math.sin(t*4)*0.35; }
+  // nuvens
+  function makeCloudTex(){ const c=document.createElement('canvas'); c.width=c.height=128; const x=c.getContext('2d');
+    for(let i=0;i<7;i++){ const gx=30+Math.random()*68,gy=44+Math.random()*40,r=22+Math.random()*26,g=x.createRadialGradient(gx,gy,0,gx,gy,r); g.addColorStop(0,'rgba(255,255,255,0.9)'); g.addColorStop(1,'rgba(255,255,255,0)'); x.fillStyle=g; x.beginPath(); x.arc(gx,gy,r,0,6.28); x.fill(); } return new THREE.CanvasTexture(c); }
+  function initClouds(){ const tex=makeCloudTex(); for(let i=0;i<7;i++){ const m=new THREE.SpriteMaterial({map:tex,transparent:true,opacity:0.85,depthWrite:false}), s=new THREE.Sprite(m);
+    const sc=22+Math.random()*22; s.scale.set(sc,sc*0.55,1); Object.assign(s.userData,{ox:(Math.random()*2-1)*90,oy:20+Math.random()*16,oz:-25-Math.random()*90,sp:1+Math.random()*1.6}); scene.add(s); clouds.push(s);} }
+  function updateClouds(dt){ const vis=!!G.biome.clouds; for(const s of clouds){ s.visible=vis; if(!vis)continue; const u=s.userData; u.ox+=u.sp*dt; if(u.ox>95)u.ox-=190;
+    s.position.set(G.player.x+u.ox, u.oy, G.player.z+u.oz); s.material.opacity=G.biome.name.includes('Noturna')?0.35:0.85; } }
+  function initLife(){ initFlock(); initBflies(); initAmbient(); initClouds(); }
+  function updateLife(dt){ const t=performance.now()*0.001; wind+=dt;
+    for(const m of grassMats) m.uniforms.uT.value=t;
+    updateFlock(dt); updateBflies(dt,t); if(ambient) updateAmbient(dt,t); updateClouds(dt);
+    for(const d of G.decor){ const s=d.userData?d.userData.sway:undefined; if(s>=0) d.rotation.z=Math.sin(t*1.4+s)*0.05; } }
+
+  function makePlatform(x,y,z,w,d){
+    let m = G.pool.pop();
+    if(!m){ m = new THREE.Mesh(boxGeo, mat(0x6fae52)); m.receiveShadow=true; m.castShadow=true; }
+    m.material = G.biome._platMat;
+    const th = 1.2;
+    m.scale.set(w, th, d); m.position.set(x, y - th/2, z); m.visible=true;
+    if(!m.parent) scene.add(m);
+    const p = { mesh:m, x, y, z, w, d, top:y, grass:null };
+    G.platforms.push(p);
+    addGrass(p);
+    return p;
+  }
+  function addCoin(x,y,z){ const m=new THREE.Mesh(coinGeo, coinMat); m.position.set(x,y,z); m.castShadow=false; scene.add(m); G.coins.push({mesh:m,x,y,z,got:false,t:Math.random()*6}); }
+  function addDecor(x,y,z,kind){
+    const b=G.biome; let m;
+    if(kind==='tree'||kind==='pine'){ const g=new THREE.Group();
+      const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.16,0.7,6), mat(0x6b4a2b)); trunk.position.y=0.35; trunk.castShadow=true; g.add(trunk);
+      if(kind==='pine'){ for(let i=0;i<3;i++){ const c=new THREE.Mesh(new THREE.ConeGeometry(0.6-i*0.13,0.6,7), mat(b.foli)); c.position.y=0.8+i*0.36; c.castShadow=true; g.add(c);} }
+      else { const c=new THREE.Mesh(new THREE.SphereGeometry(0.6,10,8), mat(b.foli)); c.position.y=1.1; c.castShadow=true; g.add(c); }
+      m=g;
+    } else if(kind==='cactus'){ const g=new THREE.Group(); const s=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.18,1.0,7), mat(b.foli)); s.position.y=0.5; s.castShadow=true; g.add(s); m=g; }
+    else { m=new THREE.Mesh(new THREE.DodecahedronGeometry(0.4+Math.random()*0.3,0), mat(b.rock)); m.castShadow=true; }
+    m.position.set(x,y,z); m.rotation.y=Math.random()*6.28;
+    m.userData.sway = (kind==='rock') ? -1 : Math.random()*6.28;   // árvores/pinheiros/cactos balançam
+    scene.add(m); G.decor.push(m);
+  }
+
+  /* ---------- geração procedural ---------- */
+  function difficulty(){ return clamp((G.phase-1)/25, 0, 0.82); } // sobe e estabiliza num nível justo
+  function genNext(){
+    const r=G.rng, c=G.cursor, diff=difficulty();
+    const depth = 6 + r()*3;
+    const width = clamp(lerp(9,6,diff) + r()*2, 5.5, 11);   // plataformas nunca estreitas demais
+    const prevDepth = G.lastPlat ? G.lastPlat.d : 6;
+    // desvio lateral pequeno (alinhado dirigindo na própria plataforma)
+    const dxWant = clamp((r()*2-1)*lerp(1.0,2.2,diff), -2.3, 2.3);
+    // ENVELOPE de alcance: a distância combinada (lacuna em Z + lateral) cabe no pulo
+    const ENV = REACH_Z*0.80;
+    const maxGap = Math.sqrt(Math.max(1, ENV*ENV - dxWant*dxWant));
+    const gapZ = clamp(lerp(1.2, maxGap-0.4, diff) + r()*0.7, 1.0, maxGap-0.3);
+    const z = c.z - (prevDepth/2 + gapZ + depth/2);
+    const nx = clamp(c.x + dxWant, -9, 9);
+    // altura: sobe pouco (<= apex-margem), desce mais (queda é fácil)
+    const up = r()<0.35 ? r()*Math.min(APEX-0.8, 1.0) : 0;
+    const down = up>0 ? 0 : r()*lerp(0.7, 2.2, diff);
+    const ny = c.y + up - down;
+    const p = makePlatform(nx, ny, z, width, depth);
+    G.lastPlat = p; c.x=nx; c.y=ny; c.z=z; G.genZ=z;
+    // cristais em arco sobre a lacuna / plataforma
+    if(r()<0.85){ const cz=z + depth*0.1; addCoin(nx, ny+1.1, cz); }
+    if(r()<0.4){ addCoin(nx + (r()*2-1)*width*0.3, ny+1.1, z - depth*0.25); }
+    // decoração
+    const dn = (r()*2)|0;
+    for(let i=0;i<dn;i++){ const dx=nx+(r()*2-1)*(width*0.4); const dz=z+(r()*2-1)*(depth*0.35);
+      addDecor(dx, ny, dz, r()<0.7 ? G.biome.decor : 'rock'); }
+  }
+  function ensureAhead(){ while(G.genZ > G.player.z - 90) genNext(); }
+  function recycleBehind(){
+    const backZ = G.player.z + 40;
+    G.platforms = G.platforms.filter(p=>{ if(p.z>backZ){ p.mesh.visible=false; G.pool.push(p.mesh); if(p.grass){ scene.remove(p.grass); p.grass=null; } return false; } return true; });
+    G.coins = G.coins.filter(c=>{ if(c.z>backZ){ scene.remove(c.mesh); return false; } return true; });
+    G.decor = G.decor.filter(d=>{ if(d.position.z>backZ){ scene.remove(d); return false; } return true; });
+  }
+
+  /* ---------- aplicar bioma ---------- */
+  function applyBiome(b){
+    G.biome=b; b._platMat = b._platMat || mat(b.plat,.95);
+    if(b.grass && !b._grassMat) b._grassMat = grassMaterial(b.gBase, b.gTip);
+    sky.material.uniforms.top.value.setHex(b.top); sky.material.uniforms.bot.value.setHex(b.bot);
+    scene.fog.color.setHex(b.fog); scene.fog.density = b.name.includes('Vulc')||b.name.includes('Noturna') ? 0.02 : 0.011;
+    sun.color.setHex(b.sun); sun.intensity=b.si; hemi.color.setHex(b.top); hemi.intensity = b.si*0.7;
+    renderer.setClearColor(b.fog);
+    configAmbient();
+  }
+
+  /* ---------- iniciar / resetar fase ---------- */
+  function clearWorld(){
+    for(const p of G.platforms){ p.mesh.visible=false; G.pool.push(p.mesh); if(p.grass){ scene.remove(p.grass); p.grass=null; } }
+    for(const c of G.coins) scene.remove(c.mesh);
+    for(const d of G.decor) scene.remove(d);
+    G.platforms=[]; G.coins=[]; G.decor=[];
+  }
+  function startPhase(n, resetRun){
+    G.phase=n; applyBiome(biomeForPhase(n));
+    G.rng = mulberry32(n*99991 + 7);
+    clearWorld();
+    G.cursor={x:0,y:0,z:0}; G.lastPlat=null; G.genZ=0;
+    // plataforma inicial larga
+    const start=makePlatform(0,0,0,10,10); G.lastPlat=start;
+    G.cursor={x:0,y:0,z:-1};
+    G.player.set(0, 0, 0); G.vel.set(0,0,0); G.onGround=true; G.jumps=0; G.safe.set(0,0,0);
+    if(resetRun){ G.hearts=3; G.coinsN=0; }
+    G.dist=0;
+    for(let i=0;i<14;i++) genNext();
+    updateHUD();
+    banner(`Fase ${n} — ${G.biome.name}`);
+  }
+  function startGame(fromPhase){ hideScreens(); G.mode='play'; startPhase(fromPhase,true); Sfx.rd(); clock.last=performance.now(); }
+
+  /* ================= física / controle ================= */
+  function groundUnder(px,pz,feetY){
+    let best=null;
+    for(const p of G.platforms){
+      if(Math.abs(px-p.x)<=p.w/2+0.25 && Math.abs(pz-p.z)<=p.d/2+0.25){
+        if(p.top <= feetY+0.35 && (!best || p.top>best.top)) best=p;
+      }
+    }
+    return best;
+  }
+  function update(dt){
+    const p=G.player;
+    // direção desejada (mundo): frente=-Z
+    let dx=(input.r-input.l), dz=(input.b-input.f);
+    const len=Math.hypot(dx,dz); if(len>1){ dx/=len; dz/=len; }
+    const acc=(G.onGround?ACC:AIR_ACC)*dt;
+    G.vel.x += (dx*MOVE - G.vel.x) * clamp(acc/MOVE,0,1);
+    G.vel.z += (dz*MOVE - G.vel.z) * clamp(acc/MOVE,0,1);
+    if(dx===0&&dz===0&&G.onGround){ const f=FRICTION*dt; const s=Math.hypot(G.vel.x,G.vel.z); const ns=Math.max(0,s-f); if(s>0){G.vel.x*=ns/s; G.vel.z*=ns/s;} }
+    // facing
+    if(Math.abs(G.vel.x)+Math.abs(G.vel.z) > 0.5){ G.facing = Math.atan2(G.vel.x, G.vel.z); }
+
+    // pulo (coyote + buffer)
+    G.coyote = G.onGround ? COYOTE : Math.max(0,G.coyote-dt);
+    if(input.jumpEdge){ G.jbuf=JBUF; input.jumpEdge=false; } else G.jbuf=Math.max(0,G.jbuf-dt);
+    if(G.jbuf>0 && (G.coyote>0 || G.jumps<1)){ G.vel.y=JUMP_V; G.onGround=false; G.coyote=0; G.jbuf=0; G.jumps=(G.coyote>0?1:G.jumps+1); G.squash=1.35; Sfx.jump(); }
+    if(!input.jumpHeld && G.vel.y>0) G.vel.y*=0.86; // pulo variável
+
+    // gravidade
+    G.vel.y -= GRAV*dt; if(G.vel.y<-MAX_FALL)G.vel.y=-MAX_FALL;
+
+    // integra
+    p.x += G.vel.x*dt; p.z += G.vel.z*dt; p.y += G.vel.y*dt;
+
+    // colisão vertical com plataformas
+    const support = groundUnder(p.x, p.z, p.y);
+    if(G.vel.y<=0 && support && p.y <= support.top+0.001 && p.y >= support.top-0.6){
+      p.y = support.top; G.vel.y=0;
+      if(!G.onGround){ Sfx.land(); G.squash=0.7; }
+      G.onGround=true; G.jumps=0; G.safe.set(support.x, support.top, support.z);
+    } else if(support && G.vel.y<=0 && p.y < support.top && p.y > support.top-1.0){
+      // pequeno degrau para cima
+      p.y=support.top; G.vel.y=0; G.onGround=true; G.jumps=0; G.safe.set(support.x,support.top,support.z);
+    } else {
+      G.onGround=false;
+    }
+
+    // queda no abismo
+    if(p.y < KILL_Y){ hitVoid(); }
+
+    // progresso / fase
+    G.dist = Math.max(G.dist, -p.z);
+    const newPhase = Math.floor(G.dist/140)+1;
+    if(newPhase>G.phase){ advancePhase(newPhase); }
+
+    // cristais
+    for(const c of G.coins){ if(c.got) continue;
+      const ddx=c.x-p.x, ddy=c.y-(p.y+1.2), ddz=c.z-p.z;
+      if(ddx*ddx+ddy*ddy+ddz*ddz < 1.3){ c.got=true; c.mesh.visible=false; G.coinsN++; Sfx.coin(); updateHUD();
+        if(G.coinsN%25===0){ G.hearts=Math.min(5,G.hearts+1); updateHUD(); } }
+    }
+
+    ensureAhead(); recycleBehind();
+
+    // animação do personagem
+    const spd=Math.hypot(G.vel.x,G.vel.z);
+    if(G.onGround && spd>0.4){ G.runPhase += dt*spd*1.6; }
+    const sw = G.onGround ? Math.sin(G.runPhase*2)*0.9*Math.min(1,spd/MOVE) : 0.5;
+    if(G.legL){ G.legL.rotation.x=sw; G.legR.rotation.x=-sw; G.armL.rotation.x=-sw*0.8; G.armR.rotation.x=sw*0.8;
+      if(!G.onGround){ G.legL.rotation.x=-0.5; G.legR.rotation.x=0.4; G.armL.rotation.x=-2.0; G.armR.rotation.x=-2.0; } }
+    G.squash += (1-G.squash)*Math.min(1,dt*12);
+    updateHUD();
+  }
+
+  function advancePhase(n){ for(let k=G.phase+1;k<=n;k++){} G.phase=n; const b=biomeForPhase(n); if(b!==G.biome){ applyBiome(b);
+      // regenera com o novo bioma daqui pra frente (mantém rng contínuo)
+    } G.rng = mulberry32(n*99991+7); banner(`Fase ${n} — ${G.biome.name}`); Sfx.phase();
+    const prog=+(localStorage.getItem(PROG)||1); if(n>prog) localStorage.setItem(PROG,n);
+    const best=+(localStorage.getItem(BEST)||0); if(Math.floor(G.dist)>best) localStorage.setItem(BEST,Math.floor(G.dist));
+    updateHUD(); }
+
+  function hitVoid(){
+    G.hearts--; Sfx.hurt(); updateHUD();
+    if(G.hearts<=0){ gameOver(); return; }
+    // respawn no último ponto seguro
+    G.player.set(G.safe.x, G.safe.y+0.5, G.safe.z); G.vel.set(0,0,0); G.onGround=false;
+    banner('❤ Cuidado com o abismo!');
+  }
+  function gameOver(){
+    G.mode='over'; Sfx.over();
+    const best=+(localStorage.getItem(BEST)||0);
+    document.getElementById('ovPhase').textContent=G.phase;
+    document.getElementById('ovDist').textContent=Math.floor(G.dist);
+    document.getElementById('ovCoins').textContent=G.coinsN;
+    document.getElementById('ovBest').textContent = Math.floor(G.dist)>=best ? '🏆 Novo recorde de distância!' : `Recorde: ${best} m`;
+    showScreen('scrOver');
+  }
+
+  /* ================= câmera ================= */
+  const camGoal=new THREE.Vector3(), lookGoal=new THREE.Vector3();
+  function updateCamera(dt){
+    const p=G.player;
+    camGoal.set(p.x*0.55, p.y+7.0, p.z+13.5);
+    camera.position.lerp(camGoal, 1-Math.pow(0.001,dt));
+    lookGoal.set(p.x*0.4, p.y+1.0, p.z-9);
+    camera.lookAt(lookGoal);
+    sun.position.set(p.x-18, p.y+30, p.z+8); sun.target.position.set(p.x, p.y, p.z-4);
+    sky.position.copy(camera.position);
+  }
+
+  /* ================= render / sincronização de malhas ================= */
+  function syncMeshes(){
+    const p=G.player, m=G.playerMesh;
+    m.position.set(p.x, p.y, p.z);
+    m.rotation.y = G.facing;
+    m.scale.set(1/Math.sqrt(G.squash), G.squash, 1/Math.sqrt(G.squash));
+    for(const c of G.coins){ if(!c.got){ c.mesh.rotation.y+=0.03; c.mesh.position.y=c.y+Math.sin(performance.now()*0.003+c.x)*0.12; } }
+  }
+
+  /* ================= loop ================= */
+  let acc=0;
+  function frame(now){
+    let dt=(now-clock.last)/1000; clock.last=now; if(dt>0.1)dt=0.1;
+    if(G.mode==='play'){ acc+=dt; let s=0; while(acc>=STEP && s<5){ update(STEP); acc-=STEP; s++; } }
+    else acc=0;
+    if(renderer){ if(G.banT>0){ G.banT-=dt; if(G.banT<=0) document.getElementById('banner').classList.remove('show'); }
+      updateLife(dt||0.016); syncMeshes(); updateCamera(dt||0.016); renderer.render(scene,camera); }
+    requestAnimationFrame(frame);
+  }
+
+  /* ================= HUD / telas ================= */
+  function updateHUD(){
+    document.getElementById('phase').textContent='Fase '+G.phase;
+    document.getElementById('biome').textContent=G.biome.name;
+    document.getElementById('coins').textContent=G.coinsN;
+    document.getElementById('dist').textContent=Math.floor(G.dist);
+    let h=''; for(let i=0;i<Math.max(3,G.hearts);i++) h+= i<G.hearts?'❤':'🖤'; document.getElementById('hearts').textContent=h;
+  }
+  function banner(txt){ const b=document.getElementById('banner'); b.innerHTML=txt.replace(/Fase (\d+)/,'<span class="g">Fase $1</span>'); b.classList.add('show'); G.banT=1.8; }
+  const SCR=['scrTitle','scrPause','scrOver'];
+  function showScreen(id){ SCR.forEach(s=>document.getElementById(s).classList.toggle('show', s===id)); }
+  function hideScreens(){ SCR.forEach(s=>document.getElementById(s).classList.remove('show')); }
+  function toMenu(){ G.mode='title'; showScreen('scrTitle'); refreshCont(); }
+  function togglePause(){ if(G.mode==='play'){ G.mode='pause'; showScreen('scrPause'); } else if(G.mode==='pause'){ hideScreens(); G.mode='play'; clock.last=performance.now(); } }
+  function refreshCont(){ const p=+(localStorage.getItem(PROG)||1); const c=document.getElementById('contBtn'); if(p>1){ c.style.display=''; document.getElementById('contN').textContent=p; } else c.style.display='none'; }
+
+  /* ================= entrada ================= */
+  addEventListener('keydown', e=>{ Sfx.rd();
+    switch(e.key){ case 'ArrowUp': case 'w': case 'W': input.f=1; e.preventDefault(); break;
+      case 'ArrowDown': case 's': case 'S': input.b=1; e.preventDefault(); break;
+      case 'ArrowLeft': case 'a': case 'A': input.l=1; e.preventDefault(); break;
+      case 'ArrowRight': case 'd': case 'D': input.r=1; e.preventDefault(); break;
+      case ' ': if(!input.jumpHeld) input.jumpEdge=true; input.jumpHeld=true; e.preventDefault(); break;
+      case 'p': case 'P': case 'Escape': togglePause(); break;
+      case 'Enter': if(G.mode==='title') startGame(1); break; } });
+  addEventListener('keyup', e=>{ switch(e.key){ case 'ArrowUp': case 'w': case 'W': input.f=0; break;
+      case 'ArrowDown': case 's': case 'S': input.b=0; break; case 'ArrowLeft': case 'a': case 'A': input.l=0; break;
+      case 'ArrowRight': case 'd': case 'D': input.r=0; break; case ' ': input.jumpHeld=false; break; } });
+
+  // analógico virtual
+  (function(){ const area=document.getElementById('stick'), base=document.getElementById('stickBase'), knob=document.getElementById('stickKnob');
+    let id=null, cx=0, cy=0;
+    area.addEventListener('pointerdown', e=>{ Sfx.rd(); id=e.pointerId; cx=e.clientX; cy=e.clientY; base.style.display=knob.style.display='block';
+      base.style.left=(cx-60)+'px'; base.style.top=(cy-60)+'px'; base.style.bottom='auto'; knob.style.left=(cx-28)+'px'; knob.style.top=(cy-28)+'px'; });
+    area.addEventListener('pointermove', e=>{ if(e.pointerId!==id)return; let dx=e.clientX-cx, dy=e.clientY-cy; const d=Math.hypot(dx,dy), max=52; if(d>max){dx*=max/d;dy*=max/d;}
+      knob.style.left=(cx+dx-28)+'px'; knob.style.top=(cy+dy-28)+'px'; const nx=dx/max, ny=dy/max;
+      input.l=nx<-0.25?Math.min(1,-nx):0; input.r=nx>0.25?Math.min(1,nx):0; input.f=ny<-0.25?Math.min(1,-ny):0; input.b=ny>0.25?Math.min(1,ny):0; });
+    function end(e){ if(e.pointerId!==id)return; id=null; base.style.display=knob.style.display='none'; input.l=input.r=input.f=input.b=0; }
+    area.addEventListener('pointerup', end); area.addEventListener('pointercancel', end);
+  })();
+  (function(){ const jb=document.getElementById('jumpBtn');
+    jb.addEventListener('pointerdown', e=>{ e.preventDefault(); Sfx.rd(); input.jumpEdge=true; input.jumpHeld=true; });
+    jb.addEventListener('pointerup', e=>{ e.preventDefault(); input.jumpHeld=false; });
+    jb.addEventListener('pointercancel', ()=>{ input.jumpHeld=false; }); })();
+
+  document.getElementById('playBtn').addEventListener('click',()=>startGame(1));
+  document.getElementById('contBtn').addEventListener('click',()=>startGame(+(localStorage.getItem(PROG)||1)));
+  document.getElementById('resumeBtn').addEventListener('click',togglePause);
+  document.getElementById('menuBtn').addEventListener('click',toMenu);
+  document.getElementById('retryBtn').addEventListener('click',()=>startGame(G.phase));
+  document.getElementById('over2menu').addEventListener('click',toMenu);
+  document.getElementById('pause').addEventListener('click',togglePause);
+  document.getElementById('mute').addEventListener('click',()=>{ const m=Sfx.toggle(); document.getElementById('mute').textContent=m?'🔇':'🔊'; });
+
+  /* ================= PWA ================= */
+  let deferred=null;
+  addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); deferred=e; document.getElementById('installBtn').style.display=''; });
+  document.getElementById('installBtn').addEventListener('click', async ()=>{ if(deferred){ deferred.prompt(); await deferred.userChoice; deferred=null; document.getElementById('installBtn').style.display='none'; } });
+  if('serviceWorker' in navigator) addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+
+  /* ================= boot ================= */
+  function boot(){
+    if(!window.THREE || !window.WebGLRenderingContext){ document.getElementById('loader').innerHTML='Seu navegador não suporta WebGL 😕'; return; }
+    try { initThree(); initLife(); } catch(err){ document.getElementById('loader').innerHTML='Erro ao iniciar o 3D: '+err.message; console.error(err); return; }
+    applyBiome(BIOMES[0]);
+    startPhase(1,true); G.mode='title';
+    document.getElementById('loader').style.display='none';
+    showScreen('scrTitle'); refreshCont();
+    requestAnimationFrame(frame);
+  }
+  boot();
+
+  // hooks de teste
+  window.__g = { THREE, G, input, startGame, startPhase, genNext, difficulty, biomeForPhase, get ready(){ return !!renderer; } };
   </script>
 </body>
 </html>
