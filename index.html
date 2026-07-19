@@ -4,12 +4,40 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mini-Jogos • Arcade</title>
-  <meta name="description" content="Arcade web com uma coleção de jogos casuais: Jogo da Memória, Snake, 2048 e Quiz. Jogue direto no navegador." />
+  <meta name="description" content="Arcade web com o platformer Aventura Neon (5 fases + chefão) e jogos casuais: Jogo da Memória, Snake, 2048 e Quiz. Jogue direto no navegador." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕹️</text></svg>" />
+  <style>
+    .feature {
+      position: relative; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 1.5rem;
+      margin-bottom: 1.6rem; padding: clamp(1.4rem, 4vw, 2.2rem);
+      border-radius: var(--radius); overflow: hidden; isolation: isolate;
+      border: 1px solid rgba(124,92,255,.45);
+      background:
+        radial-gradient(600px 200px at 100% 0%, rgba(34,211,238,.18), transparent 60%),
+        radial-gradient(500px 260px at 0% 100%, rgba(255,92,152,.20), transparent 60%),
+        var(--panel);
+      transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
+    }
+    .feature:hover { transform: translateY(-4px); box-shadow: var(--shadow); border-color: var(--accent); }
+    .feature .badge {
+      display: inline-flex; align-items: center; gap: .4rem; font-size: .72rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .08em; color: var(--accent-2);
+      padding: .3rem .7rem; border-radius: 999px; background: rgba(124,92,255,.15);
+      border: 1px solid rgba(124,92,255,.35); margin-bottom: .8rem;
+    }
+    .feature h2 { font-size: clamp(1.6rem, 5vw, 2.3rem); font-weight: 800; letter-spacing: -.02em; line-height: 1.1; }
+    .feature h2 .grad { background: linear-gradient(90deg, var(--accent-2), var(--accent-3)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+    .feature p { color: var(--muted); margin: .5rem 0 1.1rem; max-width: 48ch; }
+    .feature .cta { display: inline-flex; align-items: center; gap: .5rem; font-weight: 700; padding: .7rem 1.4rem;
+      border-radius: 999px; color: #0d0b1f; background: linear-gradient(135deg, var(--accent-2), var(--accent));
+      box-shadow: 0 8px 20px rgba(124,92,255,.4); }
+    .feature .art { font-size: clamp(3.5rem, 12vw, 6rem); filter: drop-shadow(0 10px 20px rgba(0,0,0,.5)); }
+    @media (max-width: 620px) { .feature { grid-template-columns: 1fr; } .feature .art { display: none; } }
+  </style>
 </head>
 <body>
   <div class="wrap">
@@ -24,6 +52,16 @@
       <h1>Escolha seu <span class="grad">jogo</span></h1>
       <p>Uma coleção de jogos casuais para relaxar e desafiar sua mente. Tudo roda direto no navegador — sem instalar nada.</p>
     </section>
+
+    <a class="feature" href="plataforma/index.html">
+      <div>
+        <span class="badge">✨ Destaque • Novo</span>
+        <h2>Aventura <span class="grad">Neon</span></h2>
+        <p>Um platformer de verdade: 5 fases, inimigos, moedas, plataformas móveis e um <strong>chefão final</strong>. Corra, pule e vença!</p>
+        <span class="cta">Jogar agora &rarr;</span>
+      </div>
+      <div class="art">🎮</div>
+    </a>
 
     <main class="games" id="games">
       <a class="card" href="memoria.html">
