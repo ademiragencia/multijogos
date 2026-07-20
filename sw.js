@@ -1,5 +1,5 @@
 /* Service Worker — Explorador 3D (PWA) */
-const CACHE = 'explorador3d-v1';
+const CACHE = 'explorador3d-v2';
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
   './vendor/three.min.js',

@@ -70,6 +70,14 @@
     .loader{ position:absolute; inset:0; z-index:9; display:grid; place-items:center; background:#0c1018; color:var(--muted); font-weight:600; }
     .spin{ width:42px; height:42px; border-radius:50%; border:3px solid rgba(255,255,255,.15); border-top-color:var(--accent2); animation:sp 1s linear infinite; margin:0 auto 14px; }
     @keyframes sp{ to{ transform:rotate(360deg); } }
+    .combo{ position:absolute; top:16%; left:50%; transform:translateX(-50%) scale(.8); z-index:5; pointer-events:none;
+      font-weight:800; font-size:clamp(1.1rem,4vw,1.8rem); letter-spacing:.02em; opacity:0; transition:opacity .15s, transform .15s;
+      color:#ffd54a; text-shadow:0 2px 12px rgba(0,0,0,.6); }
+    .combo.show{ opacity:1; transform:translateX(-50%) scale(1); }
+    .popups{ position:absolute; inset:0; z-index:5; pointer-events:none; overflow:hidden; }
+    .pop{ position:absolute; transform:translate(-50%,-50%); font-weight:800; font-size:1.05rem; text-shadow:0 2px 8px rgba(0,0,0,.7);
+      animation:popUp .85s ease-out forwards; white-space:nowrap; }
+    @keyframes popUp{ 0%{ opacity:0; transform:translate(-50%,-50%) scale(.6);} 15%{ opacity:1; transform:translate(-50%,-90%) scale(1.1);} 100%{ opacity:0; transform:translate(-50%,-200%) scale(1);} }
   </style>
 </head>
 <body>
@@ -80,8 +88,8 @@
         <span class="biome" id="biome">—</span>
       </div>
       <div class="col right">
-        <span class="chip">💎 <span id="coins">0</span></span>
-        <span class="chip" style="font-size:.85rem;color:var(--muted)">📏 <span id="dist">0</span> m</span>
+        <span class="chip">⭐ <span id="score">0</span></span>
+        <span class="chip" style="font-size:.9rem">💎 <span id="coins">0</span> &nbsp; 📏 <span id="dist">0</span>m</span>
         <span class="hearts" id="hearts">❤❤❤</span>
         <div style="display:flex;gap:6px">
           <button class="mutebtn" id="mute">🔊</button>
@@ -89,6 +97,8 @@
         </div>
       </div>
     </div>
+    <div class="combo" id="combo"></div>
+    <div class="popups" id="popups"></div>
 
     <div class="stick" id="stick"><div class="base" id="stickBase"></div><div class="knob" id="stickKnob"></div></div>
     <div class="jumpbtn" id="jumpBtn">PULAR</div>
@@ -335,6 +345,81 @@
     updateFlock(dt); updateBflies(dt,t); if(ambient) updateAmbient(dt,t); updateClouds(dt);
     for(const d of G.decor){ const s=d.userData?d.userData.sway:undefined; if(s>=0) d.rotation.z=Math.sin(t*1.4+s)*0.05; } }
 
+  /* ===================== GAMEPLAY ===================== */
+  let enemies=[], pads=[], parts=[], partPool=[];
+  let gScore=0, gCombo=0, gComboT=0, gShake=0;
+
+  // partículas 3D (poeira ao aterrissar, explosões ao coletar/pisar)
+  const partGeo = new THREE.BoxGeometry(0.18,0.18,0.18);
+  function burst(x,y,z,colorHex,n,spd){ spd=spd||4;
+    for(let i=0;i<n;i++){ let m=partPool.pop(); if(!m){ m=new THREE.Mesh(partGeo,new THREE.MeshBasicMaterial()); }
+      m.material.color.setHex(colorHex); m.visible=true; m.scale.setScalar(1); if(!m.parent)scene.add(m);
+      m.position.set(x,y,z); const a=Math.random()*6.28;
+      m.userData={vx:Math.cos(a)*spd*(0.4+Math.random()), vy:2+Math.random()*spd, vz:Math.sin(a)*spd*(0.4+Math.random()), life:0.45+Math.random()*0.4};
+      parts.push(m); } }
+  function updateParts(dt){ for(const m of parts){ const u=m.userData; u.vy-=20*dt; m.position.x+=u.vx*dt; m.position.y+=u.vy*dt; m.position.z+=u.vz*dt; u.life-=dt; m.scale.setScalar(Math.max(0.01,u.life*2.2)); }
+    parts=parts.filter(m=>{ if(m.userData.life<=0){ m.visible=false; partPool.push(m); return false; } return true; }); }
+
+  // inimigos que patrulham a plataforma (pise na cabeça para derrotar)
+  const ENEMY_COL={'Deserto':0xc0642f,'Montanhas Nevadas':0x5b8fb0,'Terras Vulcânicas':0xff5530,'Floresta Noturna':0x6b3fa0};
+  function makeEnemy(color){ const g=new THREE.Group();
+    const body=new THREE.Mesh(new THREE.SphereGeometry(0.5,14,12), mat(color,.5)); body.scale.set(1,0.82,1); body.position.y=0.5; body.castShadow=true; g.add(body);
+    const eG=new THREE.SphereGeometry(0.14,8,8), ew=new THREE.MeshBasicMaterial({color:0xffffff});
+    const eL=new THREE.Mesh(eG,ew), eR=new THREE.Mesh(eG,ew); eL.position.set(-0.2,0.66,0.4); eR.position.set(0.2,0.66,0.4); g.add(eL,eR);
+    const pG=new THREE.SphereGeometry(0.07,8,8), pm=new THREE.MeshBasicMaterial({color:0x111111});
+    const pL=new THREE.Mesh(pG,pm), pR=new THREE.Mesh(pG,pm); pL.position.set(-0.2,0.66,0.52); pR.position.set(0.2,0.66,0.52); g.add(pL,pR);
+    return g; }
+  function addEnemy(p){ const g=makeEnemy(ENEMY_COL[G.biome.name]||0x9b5de5);
+    const e={mesh:g, plat:p, x:p.x, z:p.z, top:p.top, dir:Math.random()<0.5?-1:1,
+      min:p.x-(p.w/2-0.9), max:p.x+(p.w/2-0.9), spd:1.4+Math.random()*1.6, alive:true, t:Math.random()*6};
+    g.position.set(e.x,e.top,e.z); scene.add(g); enemies.push(e); p.enemy=e; }
+  function updateEnemies(dt){ const p=G.player;
+    for(const e of enemies){ if(!e.alive)continue; e.t+=dt;
+      e.x+=e.dir*e.spd*dt; if(e.x<e.min){e.x=e.min;e.dir=1;} else if(e.x>e.max){e.x=e.max;e.dir=-1;}
+      e.mesh.position.set(e.x, e.top+Math.abs(Math.sin(e.t*6))*0.09, e.z);
+      e.mesh.rotation.y = e.dir>0? Math.PI*0.5 : -Math.PI*0.5;
+      const dxp=p.x-e.x, dzp=p.z-e.z; if(dxp*dxp+dzp*dzp < 0.95 && Math.abs(p.y-e.top)<1.5){
+        if(G.vel.y<0 && p.y > e.top+0.45){ e.alive=false; e.mesh.visible=false; G.vel.y=JUMP_V*0.78; G.onGround=false; G.jumps=0;
+          addScore(50,'PISOU!',e.x,e.top+1.2,e.z,0xffd54a); burst(e.x,e.top+0.6,e.z,0xff6b9d,16,5); gShake=Math.max(gShake,0.4); Sfx.jump(); }
+        else if(G.invuln<=0){ damage(e.x); }
+      } }
+  }
+
+  // trampolins que lançam o jogador para cristais bônus
+  function addPad(p){
+    const m=new THREE.Mesh(new THREE.CylinderGeometry(0.95,1.05,0.3,18),
+      new THREE.MeshStandardMaterial({color:0x22d3ee, emissive:0x0e7490, emissiveIntensity:0.7, roughness:0.3, metalness:0.2}));
+    m.position.set(p.x, p.top+0.15, p.z); scene.add(m);
+    const pad={x:p.x,z:p.z,top:p.top,mesh:m,plat:p,t:0}; pads.push(pad); p.pad=pad;
+    for(let i=0;i<4;i++) addCoin(p.x, p.top+2.6+i*1.5, p.z);
+  }
+  function bouncePlayer(pad){ G.vel.y=18; G.onGround=false; G.jumps=1; G.squash=1.5; pad.t=0.001;
+    burst(pad.x,pad.top+0.4,pad.z,0x67e8f9,12,4); Sfx.jump(); }
+  function updatePads(dt){ const p=G.player;
+    for(const pad of pads){
+      if(pad.t>0){ pad.t+=dt; pad.mesh.scale.y=1+Math.sin(pad.t*22)*0.35*Math.max(0,1-pad.t*3); if(pad.t>0.5){pad.t=0; pad.mesh.scale.y=1;} }
+      // lança quando o jogador pousa/está em cima do trampolim
+      if(pad.t<=0 && G.onGround && Math.abs(p.y-pad.top)<0.5 && Math.hypot(p.x-pad.x,p.z-pad.z)<1.5){ bouncePlayer(pad); }
+    } }
+
+  // dano por contato
+  function damage(srcX){ if(G.invuln>0)return; G.hearts--; G.invuln=1.4; gCombo=0; Sfx.hurt(); gShake=Math.max(gShake,0.6); updateHUD();
+    const dir=Math.sign(G.player.x-srcX)||1; G.vel.x=dir*7; G.vel.y=6; G.onGround=false;
+    burst(G.player.x,G.player.y+1,G.player.z,0xff5c6c,14,5);
+    if(G.hearts<=0) gameOver(); }
+
+  // pontuação + combo + números que sobem na tela
+  function addScore(base,label,x,y,z,color){ gCombo++; gComboT=2.4; const gained=base*Math.max(1,gCombo); gScore+=gained;
+    if(x!==undefined) popup((label?label+' ':'')+'+'+gained, x,y,z, color||0x67e8f9); updateHUD(); }
+  function popup(text,x,y,z,colorHex){ const el=document.getElementById('popups'); if(!el||!camera)return;
+    const v=new THREE.Vector3(x,y,z).project(camera); if(v.z>1)return;
+    const d=document.createElement('div'); d.className='pop'; d.textContent=text;
+    d.style.left=((v.x*0.5+0.5)*innerWidth)+'px'; d.style.top=((-v.y*0.5+0.5)*innerHeight)+'px';
+    d.style.color='#'+(colorHex>>>0).toString(16).padStart(6,'0'); el.appendChild(d); setTimeout(()=>d.remove(),850); }
+  function updateCombo(dt){ if(gComboT>0){ gComboT-=dt; if(gComboT<=0 && gCombo>0){ gCombo=0; updateHUD(); } } }
+  function clearGameplay(){ for(const e of enemies) scene.remove(e.mesh); for(const pd of pads) scene.remove(pd.mesh);
+    for(const m of parts){ m.visible=false; partPool.push(m); } enemies=[]; pads=[]; parts=[]; gCombo=0; gComboT=0; gShake=0; }
+
   function makePlatform(x,y,z,w,d){
     let m = G.pool.pop();
     if(!m){ m = new THREE.Mesh(boxGeo, mat(0x6fae52)); m.receiveShadow=true; m.castShadow=true; }
@@ -390,6 +475,9 @@
     const dn = (r()*2)|0;
     for(let i=0;i<dn;i++){ const dx=nx+(r()*2-1)*(width*0.4); const dz=z+(r()*2-1)*(depth*0.35);
       addDecor(dx, ny, dz, r()<0.7 ? G.biome.decor : 'rock'); }
+    // trampolins (bônus) e inimigos — nunca na mesma plataforma; longe do início
+    if(z < -24 && width > 7.5 && r() < 0.14) addPad(p);
+    if(!p.pad && z < -18 && r() < 0.22 + diff*0.40) addEnemy(p);
   }
   function ensureAhead(){ while(G.genZ > G.player.z - 90) genNext(); }
   function recycleBehind(){
@@ -397,6 +485,8 @@
     G.platforms = G.platforms.filter(p=>{ if(p.z>backZ){ p.mesh.visible=false; G.pool.push(p.mesh); if(p.grass){ scene.remove(p.grass); p.grass=null; } return false; } return true; });
     G.coins = G.coins.filter(c=>{ if(c.z>backZ){ scene.remove(c.mesh); return false; } return true; });
     G.decor = G.decor.filter(d=>{ if(d.position.z>backZ){ scene.remove(d); return false; } return true; });
+    enemies = enemies.filter(e=>{ if(e.z>backZ){ scene.remove(e.mesh); return false; } return true; });
+    pads = pads.filter(pd=>{ if(pd.z>backZ){ scene.remove(pd.mesh); return false; } return true; });
   }
 
   /* ---------- aplicar bioma ---------- */
@@ -416,6 +506,7 @@
     for(const c of G.coins) scene.remove(c.mesh);
     for(const d of G.decor) scene.remove(d);
     G.platforms=[]; G.coins=[]; G.decor=[];
+    clearGameplay();
   }
   function startPhase(n, resetRun){
     G.phase=n; applyBiome(biomeForPhase(n));
@@ -426,7 +517,8 @@
     const start=makePlatform(0,0,0,10,10); G.lastPlat=start;
     G.cursor={x:0,y:0,z:-1};
     G.player.set(0, 0, 0); G.vel.set(0,0,0); G.onGround=true; G.jumps=0; G.safe.set(0,0,0);
-    if(resetRun){ G.hearts=3; G.coinsN=0; }
+    G.invuln=0;
+    if(resetRun){ G.hearts=3; G.coinsN=0; gScore=0; }
     G.dist=0;
     for(let i=0;i<14;i++) genNext();
     updateHUD();
@@ -472,7 +564,7 @@
     const support = groundUnder(p.x, p.z, p.y);
     if(G.vel.y<=0 && support && p.y <= support.top+0.001 && p.y >= support.top-0.6){
       p.y = support.top; G.vel.y=0;
-      if(!G.onGround){ Sfx.land(); G.squash=0.7; }
+      if(!G.onGround){ Sfx.land(); G.squash=0.7; burst(p.x,support.top,p.z,0xffffff,7,2.4); }
       G.onGround=true; G.jumps=0; G.safe.set(support.x, support.top, support.z);
     } else if(support && G.vel.y<=0 && p.y < support.top && p.y > support.top-1.0){
       // pequeno degrau para cima
@@ -492,9 +584,15 @@
     // cristais
     for(const c of G.coins){ if(c.got) continue;
       const ddx=c.x-p.x, ddy=c.y-(p.y+1.2), ddz=c.z-p.z;
-      if(ddx*ddx+ddy*ddy+ddz*ddz < 1.3){ c.got=true; c.mesh.visible=false; G.coinsN++; Sfx.coin(); updateHUD();
-        if(G.coinsN%25===0){ G.hearts=Math.min(5,G.hearts+1); updateHUD(); } }
+      if(ddx*ddx+ddy*ddy+ddz*ddz < 1.6){ c.got=true; c.mesh.visible=false; G.coinsN++; Sfx.coin();
+        addScore(10,'',c.x,c.y,c.z,0x67e8f9); burst(c.x,c.y,c.z,0x67e8f9,8,3);
+        if(G.coinsN%25===0){ G.hearts=Math.min(5,G.hearts+1); } updateHUD(); }
     }
+
+    // sistemas de gameplay
+    if(G.invuln>0) G.invuln-=dt;
+    updateEnemies(dt); updatePads(dt); updateParts(dt); updateCombo(dt);
+    if(gShake>0) gShake=Math.max(0, gShake-dt*2.2);
 
     ensureAhead(); recycleBehind();
 
@@ -528,7 +626,7 @@
     document.getElementById('ovPhase').textContent=G.phase;
     document.getElementById('ovDist').textContent=Math.floor(G.dist);
     document.getElementById('ovCoins').textContent=G.coinsN;
-    document.getElementById('ovBest').textContent = Math.floor(G.dist)>=best ? '🏆 Novo recorde de distância!' : `Recorde: ${best} m`;
+    document.getElementById('ovBest').innerHTML = `Pontuação: <b>${gScore}</b> ⭐<br>` + (Math.floor(G.dist)>=best ? '🏆 Novo recorde de distância!' : `Recorde: ${best} m`);
     showScreen('scrOver');
   }
 
@@ -538,6 +636,7 @@
     const p=G.player;
     camGoal.set(p.x*0.55, p.y+7.0, p.z+13.5);
     camera.position.lerp(camGoal, 1-Math.pow(0.001,dt));
+    if(gShake>0){ camera.position.x+=(Math.random()-0.5)*gShake; camera.position.y+=(Math.random()-0.5)*gShake; }
     lookGoal.set(p.x*0.4, p.y+1.0, p.z-9);
     camera.lookAt(lookGoal);
     sun.position.set(p.x-18, p.y+30, p.z+8); sun.target.position.set(p.x, p.y, p.z-4);
@@ -550,6 +649,7 @@
     m.position.set(p.x, p.y, p.z);
     m.rotation.y = G.facing;
     m.scale.set(1/Math.sqrt(G.squash), G.squash, 1/Math.sqrt(G.squash));
+    m.visible = !(G.invuln>0 && Math.floor(G.invuln*14)%2===0);
     for(const c of G.coins){ if(!c.got){ c.mesh.rotation.y+=0.03; c.mesh.position.y=c.y+Math.sin(performance.now()*0.003+c.x)*0.12; } }
   }
 
@@ -570,6 +670,8 @@
     document.getElementById('biome').textContent=G.biome.name;
     document.getElementById('coins').textContent=G.coinsN;
     document.getElementById('dist').textContent=Math.floor(G.dist);
+    const sc=document.getElementById('score'); if(sc) sc.textContent=gScore;
+    const cb=document.getElementById('combo'); if(cb){ if(gCombo>=2){ cb.textContent='COMBO x'+gCombo; cb.classList.add('show'); } else cb.classList.remove('show'); }
     let h=''; for(let i=0;i<Math.max(3,G.hearts);i++) h+= i<G.hearts?'❤':'🖤'; document.getElementById('hearts').textContent=h;
   }
   function banner(txt){ const b=document.getElementById('banner'); b.innerHTML=txt.replace(/Fase (\d+)/,'<span class="g">Fase $1</span>'); b.classList.add('show'); G.banT=1.8; }

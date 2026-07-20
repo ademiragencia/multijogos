@@ -21,6 +21,11 @@ você avança de fase e o cenário muda de bioma; a dificuldade sobe e estabiliz
 - **Fases infinitas procedurais** deterministas (a Fase N é sempre igual), sempre transponíveis: a distância
   combinada (lacuna + desvio lateral) nunca excede a envoltória do pulo — verificado geometricamente da
   Fase 1 à 100 (zero saltos fora do alcance)
+- **Desafio e recompensa:** inimigos que patrulham as plataformas (**pise na cabeça** para derrotá-los e
+  ganhar pontos, ou desvie), **trampolins** que te lançam para colunas de **cristais bônus**, e um sistema
+  de **combo + pontuação** com números que sobem na tela
+- **"Suco" visual:** poeira ao aterrissar, explosão de partículas ao coletar/pisar, tremida de câmera e
+  piscar de invencibilidade ao levar dano
 - **Mundo vivo:** grama que balança ao vento (instanciada, no vertex shader), pássaros voando em revoada,
   borboletas, nuvens à deriva, árvores que balançam e **partículas de ambiente por bioma** — pólen (campos),
   poeira (deserto), neve, brasas (vulcão) e **vaga-lumes** (floresta noturna)
