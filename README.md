@@ -21,6 +21,11 @@ você avança de fase e o cenário muda de bioma; a dificuldade sobe e estabiliz
 - **Fases infinitas procedurais** deterministas (a Fase N é sempre igual), sempre transponíveis: a distância
   combinada (lacuna + desvio lateral) nunca excede a envoltória do pulo — verificado geometricamente da
   Fase 1 à 100 (zero saltos fora do alcance)
+- **CHEFÕES a cada 5 fases**: gigantes de coroa que perseguem você na arena — 3 pisadas para derrotar,
+  recompensa de +500 pontos e um coração extra
+- **Cofre de cristais + loja**: os cristais coletados vão para um cofre persistente; desbloqueie o
+  Astronauta (80), o Mago (160) e o Cavaleiro (250) na tela de seleção
+- **Mar sob o mundo**: lava incandescente no vulcão, água nos campos/floresta/ruínas e mar de nuvens no céu
 - **8 mundos com identidade própria**: Campos, Deserto, Montanhas Nevadas, Terras Vulcânicas, Floresta
   Noturna, Cavernas de Cristal (vaga-lumes ciano e estalagmites), Cidade Antiga (ruínas e colunas) e Reino
   do Céu (plataformas de mármore entre nuvens) — cada um com luz, cor, música e decoração únicas

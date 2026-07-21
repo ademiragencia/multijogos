@@ -119,6 +119,7 @@
       <div class="box">
         <h1>Explorador <span class="g">3D</span></h1>
         <p>Um platformer 3D com fases infinitas geradas na hora, iluminação realista e câmera em 3ª pessoa. Salte entre plataformas, colete cristais e vá o mais longe que puder por biomas diferentes.</p>
+        <p class="help" style="margin:-.6rem 0 1rem">💎 <b id="bankN">0</b> cristais no cofre &nbsp;•&nbsp; 🏁 recorde: <b id="bestN">0</b> m</p>
         <button class="btn" id="playBtn">▶ Jogar</button>
         <button class="btn ghost" id="contBtn" style="display:none">Continuar (Fase <span id="contN">1</span>)</button>
         <button class="btn ghost" id="charBtn">🧍 Personagem: <span id="charTitleName">Exploradora</span></button>
@@ -141,6 +142,7 @@
           <button class="btn ghost" id="charNext">▶</button>
         </div>
         <div class="char-dots" id="charDots"></div>
+        <p class="help" style="margin-bottom:.6rem">Seus cristais: 💎 <b id="charBank">0</b></p>
         <button class="btn" id="charOk">✓ Escolher</button>
       </div>
     </div>
@@ -208,6 +210,10 @@
     { name:"Reino do Céu", top:0x9fd0ff, bot:0xffffff, fog:0xd8ecff, sun:0xfffbe8, si:1.25, plat:0xe8f2fa, rock:0xc8d8e8, foli:0x8fc27a, decor:'cloudpuff',
       grass:0.0, amb:{mode:'pollen',color:0xffffff,size:0.3,add:false}, birds:0xffffff, bfly:true, clouds:true },
   ];
+  // mar de líquido sob o mundo, por bioma (null = abismo)
+  const LIQUIDS = { "Campos":{c:0x2b7fd4,e:0x0a2a55,ei:.25,op:.85}, "Deserto":null, "Montanhas Nevadas":null,
+    "Terras Vulcânicas":{c:0xff5a1a,e:0xff3a00,ei:.9,op:.95}, "Floresta Noturna":{c:0x0e2a4a,e:0x061a30,ei:.3,op:.9},
+    "Cavernas de Cristal":null, "Cidade Antiga":{c:0x3a8fb0,e:0x0e3a50,ei:.2,op:.8}, "Reino do Céu":{c:0xffffff,e:0xdfeaff,ei:.35,op:.75} };
   const MUSIC_ROOT = { "Campos":130.8, "Deserto":146.8, "Montanhas Nevadas":110, "Terras Vulcânicas":87.3, "Floresta Noturna":82.4, "Cavernas de Cristal":98, "Cidade Antiga":138.6, "Reino do Céu":164.8 };
   const biomeForPhase = n => BIOMES[Math.floor((n-1)/3) % BIOMES.length];
 
@@ -317,10 +323,23 @@
     { name:"Exploradora", skin:0xe8b48c, hair:0x3a2a1e, shirt:0x38bdf8, pants:0x27324a, shoe:0x2a1f16, acc:'cap' },
     { name:"Ninja",       skin:0x2a2a30, hair:0x111111, shirt:0x1a1a22, pants:0x111118, shoe:0x0a0a0a, acc:'ninja', sash:0xff3b3b },
     { name:"Robô",        skin:0xc2ccd6, hair:0x8fa0b5, shirt:0x4a6fa5, pants:0x394a5a, shoe:0x2a3542, acc:'robot', glow:0x67e8f9 },
-    { name:"Astronauta",  skin:0xe8b48c, hair:0x3a2a1e, shirt:0xeef3f8, pants:0xdbe3ec, shoe:0xb4bec8, acc:'astro' },
-    { name:"Mago",        skin:0xe8b48c, hair:0xe8e8e8, shirt:0x6b3fa0, pants:0x3a2560, shoe:0x2a1c40, acc:'wizard', hat:0x8b5cf6 },
-    { name:"Cavaleiro",   skin:0xe8b48c, hair:0x5a4a3a, shirt:0x9aa4b0, pants:0x6a7480, shoe:0x4a5460, acc:'knight', plume:0xff5c5c },
+    { name:"Astronauta",  skin:0xe8b48c, hair:0x3a2a1e, shirt:0xeef3f8, pants:0xdbe3ec, shoe:0xb4bec8, acc:'astro', cost:80 },
+    { name:"Mago",        skin:0xe8b48c, hair:0xe8e8e8, shirt:0x6b3fa0, pants:0x3a2560, shoe:0x2a1c40, acc:'wizard', hat:0x8b5cf6, cost:160 },
+    { name:"Cavaleiro",   skin:0xe8b48c, hair:0x5a4a3a, shirt:0x9aa4b0, pants:0x6a7480, shoe:0x4a5460, acc:'knight', plume:0xff5c5c, cost:250 },
   ];
+
+  /* ---------- banco de cristais + desbloqueio de personagens ---------- */
+  const BANK_KEY='exp3d.bank', UNLOCK_KEY='exp3d.unlocked';
+  function getBank(){ return +(localStorage.getItem(BANK_KEY)||0); }
+  function addBank(n){ localStorage.setItem(BANK_KEY, getBank()+n); refreshBankUI(); }
+  function spendBank(n){ localStorage.setItem(BANK_KEY, Math.max(0,getBank()-n)); refreshBankUI(); }
+  function getUnlockedList(){ try{ return JSON.parse(localStorage.getItem(UNLOCK_KEY)||'[]'); }catch(e){ return []; } }
+  function isUnlocked(i){ return !CHARACTERS[i].cost || getUnlockedList().includes(i); }
+  function unlockChar(i){ const u=getUnlockedList(); if(!u.includes(i)){ u.push(i); localStorage.setItem(UNLOCK_KEY, JSON.stringify(u)); } }
+  function bankCredit(){ if(G.coinsN>0){ addBank(G.coinsN); G.coinsN=0; } }
+  function refreshBankUI(){ const b=getBank();
+    const el=document.getElementById('bankN'); if(el) el.textContent=b;
+    const cb=document.getElementById('charBank'); if(cb) cb.textContent=b; }
 
   function makeCharacterMesh(cfg){
     const g = new THREE.Group();
@@ -366,12 +385,15 @@
     if(!G.player) G.player = new THREE.Vector3(0,0,0);   // pés (base) do personagem
   }
   function setCharacter(i){ G.charIndex=((i%CHARACTERS.length)+CHARACTERS.length)%CHARACTERS.length;
-    localStorage.setItem('exp3d.char', G.charIndex);
+    const C=CHARACTERS[G.charIndex], locked=!isUnlocked(G.charIndex);
+    if(!locked) localStorage.setItem('exp3d.char', G.charIndex);   // só persiste desbloqueado
     const cur=G.player?G.player.clone():null, curFace=G.facing;
-    buildPlayer(CHARACTERS[G.charIndex]);
+    buildPlayer(C);
     if(cur){ G.playerMesh.position.copy(cur); G.playerMesh.rotation.y=curFace; }
-    const nm=document.getElementById('charName'); if(nm) nm.textContent=CHARACTERS[G.charIndex].name;
-    const tl=document.getElementById('charTitleName'); if(tl) tl.textContent=CHARACTERS[G.charIndex].name;
+    const nm=document.getElementById('charName'); if(nm) nm.textContent=C.name + (locked?' 🔒':'');
+    const tl=document.getElementById('charTitleName'); if(tl && !locked) tl.textContent=C.name;
+    const ok=document.getElementById('charOk');
+    if(ok) ok.textContent = locked ? `🔓 Desbloquear (${C.cost} 💎)` : '✓ Escolher';
     const dots=document.getElementById('charDots');
     if(dots) [...dots.children].forEach((d,k)=>d.classList.toggle('on', k===G.charIndex)); }
 
@@ -481,10 +503,28 @@
     const sc=22+Math.random()*22; s.scale.set(sc,sc*0.55,1); Object.assign(s.userData,{ox:(Math.random()*2-1)*90,oy:20+Math.random()*16,oz:-25-Math.random()*90,sp:1+Math.random()*1.6}); scene.add(s); clouds.push(s);} }
   function updateClouds(dt){ const vis=!!G.biome.clouds; for(const s of clouds){ s.visible=vis; if(!vis)continue; const u=s.userData; u.ox+=u.sp*dt; if(u.ox>95)u.ox-=190;
     s.position.set(G.player.x+u.ox, u.oy, G.player.z+u.oz); s.material.opacity=G.biome.name.includes('Noturna')?0.35:0.85; } }
-  function initLife(){ initFlock(); initBflies(); initAmbient(); initClouds(); }
+  let liquid=null, sunGlow=null;
+  function initLiquid(){
+    const g=new THREE.PlaneGeometry(520,520,1,1); g.rotateX(-Math.PI/2);
+    liquid=new THREE.Mesh(g, new THREE.MeshStandardMaterial({color:0x2b7fd4, emissive:0x0a2a55, emissiveIntensity:.25,
+      transparent:true, opacity:.85, roughness:.35, metalness:.1 }));
+    liquid.position.y=-17; scene.add(liquid);
+  }
+  function initSunGlow(){
+    const c=document.createElement('canvas'); c.width=c.height=128; const x=c.getContext('2d');
+    const gr=x.createRadialGradient(64,64,2,64,64,64); gr.addColorStop(0,'rgba(255,250,230,0.95)');
+    gr.addColorStop(0.35,'rgba(255,240,200,0.35)'); gr.addColorStop(1,'rgba(255,240,200,0)');
+    x.fillStyle=gr; x.fillRect(0,0,128,128);
+    sunGlow=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c), blending:THREE.AdditiveBlending, depthWrite:false, depthTest:false, transparent:true}));
+    sunGlow.scale.set(46,46,1); scene.add(sunGlow);
+  }
+  function initLife(){ initFlock(); initBflies(); initAmbient(); initClouds(); initLiquid(); initSunGlow(); }
   function updateLife(dt){ const t=performance.now()*0.001; wind+=dt;
     for(const m of grassMats) m.uniforms.uT.value=t;
     coinMat.emissiveIntensity = 0.55 + Math.sin(t*3.2)*0.3;   // cristais pulsando
+    if(liquid && liquid.visible){ liquid.position.set(G.player.x, -17+Math.sin(t*0.7)*0.4, G.player.z);
+      liquid.material.emissiveIntensity = (LIQUIDS[G.biome.name]?LIQUIDS[G.biome.name].ei:0.25) * (1+Math.sin(t*1.3)*0.25); }
+    if(sunGlow && sunGlow.visible){ sunGlow.position.set(G.player.x-34, G.player.y+42, G.player.z-30); }
     updateFlock(dt); updateBflies(dt,t); if(ambient) updateAmbient(dt,t); updateClouds(dt);
     for(const d of G.decor){ const s=d.userData?d.userData.sway:undefined; if(s>=0) d.rotation.z=Math.sin(t*1.4+s)*0.05; } }
 
@@ -547,12 +587,53 @@
   function addFlyer(x,y,z){ const g=makeFlyerMesh(ENEMY_COL[G.biome.name]||0x9b5de5);
     const e={type:'flyer', mesh:g, x, z, baseY:y, top:y, alive:true, t:Math.random()*6, amp:0.5+Math.random()*0.4};
     g.position.set(x,y,z); scene.add(g); enemies.push(e); }
+  /* ---------- CHEFÃO: aparece a cada 5 fases, 3 pisadas para derrotar ---------- */
+  let lastBossPhase=0;
+  function addBoss(p){
+    const g=makeEnemy(0xd42a4a); g.scale.setScalar(2.3);
+    const crown=new THREE.Group();
+    for(let k=0;k<5;k++){ const spike=new THREE.Mesh(new THREE.ConeGeometry(0.09,0.26,4), mat(0xffd54a,.35,.6));
+      const a=(k/5)*6.28; spike.position.set(Math.cos(a)*0.32, 1.05, Math.sin(a)*0.32); crown.add(spike); }
+    const band=new THREE.Mesh(new THREE.CylinderGeometry(0.36,0.36,0.14,12), mat(0xffd54a,.35,.6)); band.position.y=0.96; crown.add(band);
+    g.add(crown);
+    const e={type:'boss', mesh:g, plat:p, x:p.x, z:p.z, top:p.top, hp:3, alive:true, t:0, inv:0, warned:false,
+      min:p.x-(p.w/2-1.2), max:p.x+(p.w/2-1.2), zmin:p.z-(p.d/2-1.2), zmax:p.z+(p.d/2-1.2)};
+    g.position.set(e.x,e.top,e.z); scene.add(g); enemies.push(e); p.enemy=e;
+  }
+  function updateBoss(e,dt,p){
+    if(e.inv>0) e.inv-=dt;
+    if(!e.warned && Math.abs(p.z-e.z)<34){ e.warned=true; banner('⚠️ CHEFÃO à frente!'); Sfx.hurt(); }
+    // persegue o jogador dentro da arena quando ele chega perto
+    const near = Math.abs(p.z-e.z)<10 && Math.abs(p.y-e.top)<4;
+    if(near){ const sp=2.6;
+      e.x=clamp(e.x+Math.sign(p.x-e.x)*sp*dt, e.min, e.max);
+      e.z=clamp(e.z+Math.sign(p.z-e.z)*sp*dt, e.zmin, e.zmax); }
+    const hop=Math.abs(Math.sin(e.t*3.2))*0.22;
+    e.mesh.position.set(e.x, e.top+hop, e.z);
+    e.mesh.rotation.y=Math.atan2(p.x-e.x, p.z-e.z);
+    e.mesh.visible = !(e.inv>0 && Math.floor(e.t*16)%2===0);   // pisca quando acertado
+    const sc=1+Math.sin(e.t*7)*0.03; e.mesh.scale.set(2.3*sc, 2.3*(2-sc), 2.3*sc);
+    const dxp=p.x-e.x, dzp=p.z-e.z;
+    if(dxp*dxp+dzp*dzp < 2.6 && Math.abs(p.y-e.top)<2.6){
+      if(G.vel.y<0 && p.y > e.top+1.15 && e.inv<=0){
+        e.hp--; e.inv=0.9; G.vel.y=JUMP_V*0.9; G.onGround=false; G.jumps=0;
+        gShake=Math.max(gShake,0.7); hitStop=0.09; Sfx.hurt();
+        burst(e.x,e.top+1.6,e.z,0xffd54a,22,6);
+        if(e.hp<=0){ e.alive=false; e.mesh.visible=false;
+          addScore(500,'CHEFÃO DERROTADO!',e.x,e.top+2.2,e.z,0xffd54a);
+          G.hearts=Math.min(5,G.hearts+1); updateHUD();
+          burst(e.x,e.top+1,e.z,0xd42a4a,30,8); hitStop=0.14; Sfx.phase(); }
+        else { addScore(150,'ACERTOU!',e.x,e.top+2.2,e.z,0xff8a5c); }
+      } else if(G.invuln<=0 && e.inv<=0){ damage(e.x); }
+    }
+  }
   function killEnemy(e){ e.alive=false; e.mesh.visible=false; G.vel.y=JUMP_V*0.78; G.onGround=false; G.jumps=0;
     const ey=e.type==='flyer'? e.top : e.top+0.6;
     addScore(e.type==='flyer'?80:50,'PISOU!',e.x,ey+0.8,e.z,0xffd54a); burst(e.x,ey,e.z,0xff6b9d,16,5);
     gShake=Math.max(gShake,0.4); hitStop=0.055; Sfx.jump(); }
   function updateEnemies(dt){ const p=G.player;
     for(const e of enemies){ if(!e.alive)continue; e.t+=dt;
+      if(e.type==='boss'){ updateBoss(e,dt,p); continue; }
       if(e.type==='flyer'){
         e.top = e.baseY + Math.sin(e.t*1.6)*e.amp;
         e.mesh.position.set(e.x, e.top, e.z);
@@ -612,7 +693,7 @@
   function updateCombo(dt){ if(gComboT>0){ gComboT-=dt; if(gComboT<=0 && gCombo>0){ gCombo=0; updateHUD(); } } }
   function clearGameplay(){ for(const e of enemies) scene.remove(e.mesh); for(const pd of pads) scene.remove(pd.mesh);
     for(const mv of movers) scene.remove(mv.mesh);
-    for(const m of parts){ m.visible=false; partPool.push(m); } enemies=[]; pads=[]; movers=[]; parts=[]; gCombo=0; gComboT=0; gShake=0; hitStop=0; }
+    for(const m of parts){ m.visible=false; partPool.push(m); } enemies=[]; pads=[]; movers=[]; parts=[]; gCombo=0; gComboT=0; gShake=0; hitStop=0; lastBossPhase=0; }
 
   function makePlatform(x,y,z,w,d){
     let m = G.pool.pop();
@@ -681,9 +762,16 @@
     const dn = (r()*2)|0;
     for(let i=0;i<dn;i++){ const dx=nx+(r()*2-1)*(width*0.4); const dz=z+(r()*2-1)*(depth*0.35);
       addDecor(dx, ny, dz, r()<0.7 ? G.biome.decor : 'rock'); }
+    // CHEFÃO: 1x a cada 5 fases, numa arena larga
+    const phGen = (G.phase0||1) + Math.floor(-z/140);
+    if(phGen>=5 && phGen%5===0 && phGen!==lastBossPhase && width>=7){
+      lastBossPhase=phGen;
+      p.mesh.scale.x = Math.max(p.mesh.scale.x, 10); p.w=Math.max(p.w,10);   // alarga a arena
+      addBoss(p);
+    }
     // trampolins (bônus) e inimigos — nunca na mesma plataforma; longe do início
-    if(z < -24 && width > 7.5 && r() < 0.14) addPad(p);
-    if(!p.pad && z < -18 && r() < 0.22 + diff*0.40) addEnemy(p);
+    if(!p.enemy && z < -24 && width > 7.5 && r() < 0.14) addPad(p);
+    if(!p.pad && !p.enemy && z < -18 && r() < 0.22 + diff*0.40) addEnemy(p);
     // plataforma móvel no meio de vãos grandes (ajuda dinâmica, nunca atrapalha)
     if(z < -20 && gapZ > 3.4 && r() < 0.30){
       const gapMid = (pz0 - prevDepth/2) - gapZ/2;
@@ -714,6 +802,11 @@
     scene.fog.color.setHex(b.fog); scene.fog.density = b.name.includes('Vulc')||b.name.includes('Noturna') ? 0.02 : 0.011;
     sun.color.setHex(b.sun); sun.intensity=b.si; hemi.color.setHex(b.top); hemi.intensity = b.si*0.7;
     renderer.setClearColor(b.fog);
+    if(liquid){ const L=LIQUIDS[b.name];
+      if(L){ liquid.visible=true; liquid.material.color.setHex(L.c); liquid.material.emissive.setHex(L.e);
+        liquid.material.emissiveIntensity=L.ei; liquid.material.opacity=L.op; }
+      else liquid.visible=false; }
+    if(sunGlow) sunGlow.visible = b.si>=0.8;
     configAmbient();
     if(G.mode==='play') Sfx.ambient(MUSIC_ROOT[b.name]||120);
   }
@@ -727,7 +820,7 @@
     clearGameplay();
   }
   function startPhase(n, resetRun){
-    G.phase=n; applyBiome(biomeForPhase(n));
+    G.phase=n; G.phase0=n; applyBiome(biomeForPhase(n));
     G.rng = mulberry32(n*99991 + 7);
     clearWorld();
     G.cursor={x:0,y:0,z:0}; G.lastPlat=null; G.genZ=0;
@@ -810,7 +903,7 @@
 
     // progresso / fase
     G.dist = Math.max(G.dist, -p.z);
-    const newPhase = Math.floor(G.dist/140)+1;
+    const newPhase = (G.phase0||1) + Math.floor(G.dist/140);
     if(newPhase>G.phase){ advancePhase(newPhase); }
 
     // cristais
@@ -855,7 +948,7 @@
     banner('❤ Cuidado com o abismo!');
   }
   function gameOver(){
-    G.mode='over'; Sfx.stopAmb(); Sfx.over();
+    G.mode='over'; Sfx.stopAmb(); bankCredit(); Sfx.over();
     const best=+(localStorage.getItem(BEST)||0);
     document.getElementById('ovPhase').textContent=G.phase;
     document.getElementById('ovDist').textContent=Math.floor(G.dist);
@@ -915,9 +1008,10 @@
   const SCR=['scrTitle','scrPause','scrOver','scrChar'];
   function showScreen(id){ SCR.forEach(s=>document.getElementById(s).classList.toggle('show', s===id)); }
   function hideScreens(){ SCR.forEach(s=>document.getElementById(s).classList.remove('show')); }
-  function toMenu(){ G.mode='title'; Sfx.stopAmb(); showScreen('scrTitle'); refreshCont(); }
+  function toMenu(){ G.mode='title'; Sfx.stopAmb(); bankCredit(); showScreen('scrTitle'); refreshCont(); }
   function togglePause(){ if(G.mode==='play'){ G.mode='pause'; showScreen('scrPause'); } else if(G.mode==='pause'){ hideScreens(); G.mode='play'; clock.last=performance.now(); } }
-  function refreshCont(){ const p=+(localStorage.getItem(PROG)||1); const c=document.getElementById('contBtn'); if(p>1){ c.style.display=''; document.getElementById('contN').textContent=p; } else c.style.display='none'; }
+  function refreshCont(){ const p=+(localStorage.getItem(PROG)||1); const c=document.getElementById('contBtn'); if(p>1){ c.style.display=''; document.getElementById('contN').textContent=p; } else c.style.display='none';
+    refreshBankUI(); const bn=document.getElementById('bestN'); if(bn) bn.textContent=+(localStorage.getItem(BEST)||0); }
 
   /* ================= entrada ================= */
   addEventListener('keydown', e=>{ Sfx.rd();
@@ -959,7 +1053,16 @@
   document.getElementById('charBtn').addEventListener('click',openCharSelect);
   document.getElementById('charPrev').addEventListener('click',()=>{ setCharacter(G.charIndex-1); swapPreview(); });
   document.getElementById('charNext').addEventListener('click',()=>{ setCharacter(G.charIndex+1); swapPreview(); });
-  document.getElementById('charOk').addEventListener('click',()=>{ showScreen('scrTitle'); });
+  document.getElementById('charOk').addEventListener('click',()=>{
+    if(!isUnlocked(G.charIndex)){
+      const C=CHARACTERS[G.charIndex];
+      if(getBank()>=C.cost){ spendBank(C.cost); unlockChar(G.charIndex); setCharacter(G.charIndex);
+        banner(`🔓 ${C.name} desbloqueado!`); Sfx.phase(); }
+      else { banner(`💎 Faltam ${C.cost-getBank()} cristais`); Sfx.hurt(); }
+      return;
+    }
+    showScreen('scrTitle');
+  });
 
   /* ================= PWA ================= */
   let deferred=null;
