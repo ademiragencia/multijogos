@@ -21,6 +21,13 @@ você avança de fase e o cenário muda de bioma; a dificuldade sobe e estabiliz
 - **Fases infinitas procedurais** deterministas (a Fase N é sempre igual), sempre transponíveis: a distância
   combinada (lacuna + desvio lateral) nunca excede a envoltória do pulo — verificado geometricamente da
   Fase 1 à 100 (zero saltos fora do alcance)
+- **8 mundos com identidade própria**: Campos, Deserto, Montanhas Nevadas, Terras Vulcânicas, Floresta
+  Noturna, Cavernas de Cristal (vaga-lumes ciano e estalagmites), Cidade Antiga (ruínas e colunas) e Reino
+  do Céu (plataformas de mármore entre nuvens) — cada um com luz, cor, música e decoração únicas
+- **Plataformas móveis** que aparecem sobre os vãos (o jogador viaja junto), **criaturas voadoras** com asas
+  batendo (pise ou desvie) e inimigos com gingado, respiração e passinhos
+- **Impacto de verdade**: hit-stop ao pisar num inimigo, poeira e squash proporcionais à altura da queda,
+  tremida de câmera, cristais pulsando e **música ambiente por bioma** (Web Audio) + passos ritmados
 - **6 personagens jogáveis** (Exploradora, Ninja, Robô, Astronauta, Mago e Cavaleiro) com tela de
   seleção 3D (prévia girando) e escolha salva no navegador
 - **Desafio e recompensa:** inimigos que patrulham as plataformas (**pise na cabeça** para derrotá-los e

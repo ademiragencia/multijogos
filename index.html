@@ -201,7 +201,14 @@
       grass:0.0, amb:{mode:'ember',color:0xff8a3c,size:0.26,add:true}, birds:0, bfly:false, clouds:false },
     { name:"Floresta Noturna", top:0x0e1a33, bot:0x24406b, fog:0x14233f, sun:0x9fc0ff, si:0.7, plat:0x2f5d3a, rock:0x394a55, foli:0x244a2e, decor:'pine',
       grass:0.45, gBase:0x1c3a22, gTip:0x4a8a4f, amb:{mode:'firefly',color:0xbfff7a,size:0.3,add:true}, birds:0x101018, bfly:false, clouds:false },
+    { name:"Cavernas de Cristal", top:0x140e2c, bot:0x2c1e52, fog:0x1c1338, sun:0x9a7cff, si:0.65, plat:0x4a3f6b, rock:0x352a52, foli:0x67e8f9, decor:'stalag',
+      grass:0.0, amb:{mode:'firefly',color:0x67e8f9,size:0.32,add:true}, birds:0, bfly:false, clouds:false },
+    { name:"Cidade Antiga", top:0xd9b98a, bot:0xf5e6c8, fog:0xe8d0a8, sun:0xffedc0, si:1.2, plat:0xb5a284, rock:0x9a8a70, foli:0x6b8f5a, decor:'column',
+      grass:0.18, gBase:0x6b7a45, gTip:0xb5c078, amb:{mode:'dust',color:0xe8dcc0,size:0.28,add:false}, birds:0x3a3228, bfly:true, clouds:true },
+    { name:"Reino do Céu", top:0x9fd0ff, bot:0xffffff, fog:0xd8ecff, sun:0xfffbe8, si:1.25, plat:0xe8f2fa, rock:0xc8d8e8, foli:0x8fc27a, decor:'cloudpuff',
+      grass:0.0, amb:{mode:'pollen',color:0xffffff,size:0.3,add:false}, birds:0xffffff, bfly:true, clouds:true },
   ];
+  const MUSIC_ROOT = { "Campos":130.8, "Deserto":146.8, "Montanhas Nevadas":110, "Terras Vulcânicas":87.3, "Floresta Noturna":82.4, "Cavernas de Cristal":98, "Cidade Antiga":138.6, "Reino do Céu":164.8 };
   const biomeForPhase = n => BIOMES[Math.floor((n-1)/3) % BIOMES.length];
 
   /* ---------- PRNG determinístico por fase ---------- */
@@ -225,11 +232,27 @@
 
   /* ---------- áudio ---------- */
   const Sfx=(()=>{ let ac=null,muted=false;
+    let ambOsc=[], ambGain=null, ambRoot=0;
     function rd(){ if(!ac){ try{ac=new(window.AudioContext||window.webkitAudioContext)();}catch(e){} } if(ac&&ac.state==='suspended')ac.resume(); }
     function t(f,d,ty='sine',v=.1,to=null){ if(muted)return; rd(); if(!ac)return; const o=ac.createOscillator(),g=ac.createGain(); o.type=ty; o.frequency.setValueAtTime(f,ac.currentTime); if(to)o.frequency.exponentialRampToValueAtTime(to,ac.currentTime+d); g.gain.setValueAtTime(v,ac.currentTime); g.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+d); o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+d); }
+    function n(d=.05,v=.05){ if(muted)return; rd(); if(!ac)return; const len=ac.sampleRate*d,b=ac.createBuffer(1,len,ac.sampleRate),dt=b.getChannelData(0);
+      for(let i=0;i<len;i++)dt[i]=(Math.random()*2-1)*(1-i/len); const s=ac.createBufferSource(),g=ac.createGain(); s.buffer=b; g.gain.value=v; s.connect(g);g.connect(ac.destination);s.start(); }
+    // trilha ambiente: acorde suave (fundamental + quinta + oitava) com respiração lenta, muda por bioma
+    function ambient(root){ rd(); if(!ac||root===ambRoot) return; stopAmb(); ambRoot=root; if(muted) return;
+      ambGain=ac.createGain(); ambGain.gain.value=0.0001; ambGain.connect(ac.destination);
+      const lfo=ac.createOscillator(), lg=ac.createGain(); lfo.frequency.value=0.08; lg.gain.value=0.012; lfo.connect(lg); lg.connect(ambGain.gain); lfo.start();
+      [[root,'sine',.020],[root*1.5,'sine',.012],[root*2,'triangle',.008]].forEach(([f,ty,v])=>{
+        const o=ac.createOscillator(),g=ac.createGain(); o.type=ty; o.frequency.value=f; o.detune.value=(Math.random()*8-4);
+        g.gain.value=v; o.connect(g); g.connect(ambGain); o.start(); ambOsc.push(o); });
+      ambOsc.push(lfo);
+      ambGain.gain.setTargetAtTime(0.028, ac.currentTime, 2.2); }
+    function stopAmb(){ if(ambGain){ try{ ambGain.gain.setTargetAtTime(0.0001, ac.currentTime, 0.4); }catch(e){} }
+      const olds=ambOsc; ambOsc=[]; setTimeout(()=>olds.forEach(o=>{try{o.stop()}catch(e){}}), 900); ambRoot=0; }
     return { jump(){t(420,.16,'square',.08,720);}, land(){t(160,.1,'sine',.07,90);}, coin(){t(900,.06,'sine',.1);setTimeout(()=>t(1350,.09,'sine',.1),55);},
       hurt(){t(300,.3,'sawtooth',.12,90);}, phase(){[600,760,920,1180].forEach((f,i)=>setTimeout(()=>t(f,.16,'triangle',.1),i*90));},
-      over(){[420,320,220,150].forEach((f,i)=>setTimeout(()=>t(f,.24,'sawtooth',.1),i*140));}, toggle(){muted=!muted;rd();return muted;}, rd }; })();
+      over(){[420,320,220,150].forEach((f,i)=>setTimeout(()=>t(f,.24,'sawtooth',.1),i*140));},
+      step(){ n(0.04, 0.035); }, ambient, stopAmb,
+      toggle(){ muted=!muted; rd(); if(muted) stopAmb(); return muted; }, rd }; })();
 
   /* ================= inicialização 3D ================= */
   function initThree(){
@@ -282,8 +305,12 @@
     const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(2,2); return t;
   }
   let noiseTex=null;
+  // topo com a cor do bioma; laterais mais escuras (terra/rocha) — [+x,-x,+y,-y,+z,-z]
   function platMaterial(color){ noiseTex=noiseTex||makeNoiseTexture();
-    return new THREE.MeshStandardMaterial({ color, roughness:.95, metalness:0, map:noiseTex }); }
+    const top=new THREE.MeshStandardMaterial({ color, roughness:.95, metalness:0, map:noiseTex });
+    const c=new THREE.Color(color).multiplyScalar(0.52);
+    const side=new THREE.MeshStandardMaterial({ color:c, roughness:1, metalness:0, map:noiseTex });
+    return [side,side,top,side,side,side]; }
 
   /* ---------- personagens selecionáveis ---------- */
   const CHARACTERS = [
@@ -457,12 +484,30 @@
   function initLife(){ initFlock(); initBflies(); initAmbient(); initClouds(); }
   function updateLife(dt){ const t=performance.now()*0.001; wind+=dt;
     for(const m of grassMats) m.uniforms.uT.value=t;
+    coinMat.emissiveIntensity = 0.55 + Math.sin(t*3.2)*0.3;   // cristais pulsando
     updateFlock(dt); updateBflies(dt,t); if(ambient) updateAmbient(dt,t); updateClouds(dt);
     for(const d of G.decor){ const s=d.userData?d.userData.sway:undefined; if(s>=0) d.rotation.z=Math.sin(t*1.4+s)*0.05; } }
 
   /* ===================== GAMEPLAY ===================== */
-  let enemies=[], pads=[], parts=[], partPool=[];
-  let gScore=0, gCombo=0, gComboT=0, gShake=0;
+  let enemies=[], pads=[], parts=[], partPool=[], movers=[];
+  let gScore=0, gCombo=0, gComboT=0, gShake=0, hitStop=0;
+
+  /* ---------- plataformas móveis (ajuda extra sobre os vãos) ---------- */
+  function addMover(x,y,z,axis){
+    const w=2.8, d=2.8, th=0.5;
+    const m=new THREE.Mesh(new THREE.BoxGeometry(w,th,d),
+      new THREE.MeshStandardMaterial({color:0x8ab4d8, emissive:0x2a5a7a, emissiveIntensity:.35, roughness:.5, metalness:.3}));
+    m.castShadow=true; m.receiveShadow=true; scene.add(m);
+    const mv={mesh:m, x0:x, y0:y, x, z, w, d, top:y, axis, range: axis==='y'?0.9:1.6, speed:0.9+Math.random()*0.5,
+      phase:Math.random()*6.28, t:0, dx:0, isMover:true};
+    movers.push(mv); return mv;
+  }
+  function updateMovers(dt){ for(const mv of movers){ mv.t+=dt;
+    const s=Math.sin(mv.t*mv.speed+mv.phase);
+    const nx = mv.x0 + (mv.axis==='x'? s*mv.range : 0);
+    const ny = mv.y0 + (mv.axis==='y'? s*mv.range : 0);
+    mv.dx = nx - mv.x; mv.x = nx; mv.top = ny;
+    mv.mesh.position.set(mv.x, mv.top-0.25, mv.z); } }
 
   // partículas 3D (poeira ao aterrissar, explosões ao coletar/pisar)
   const partGeo = new THREE.BoxGeometry(0.18,0.18,0.18);
@@ -476,7 +521,8 @@
     parts=parts.filter(m=>{ if(m.userData.life<=0){ m.visible=false; partPool.push(m); return false; } return true; }); }
 
   // inimigos que patrulham a plataforma (pise na cabeça para derrotar)
-  const ENEMY_COL={'Deserto':0xc0642f,'Montanhas Nevadas':0x5b8fb0,'Terras Vulcânicas':0xff5530,'Floresta Noturna':0x6b3fa0};
+  const ENEMY_COL={'Deserto':0xc0642f,'Montanhas Nevadas':0x5b8fb0,'Terras Vulcânicas':0xff5530,'Floresta Noturna':0x6b3fa0,
+    'Cavernas de Cristal':0x8a5cf6,'Cidade Antiga':0xa08a5a,'Reino do Céu':0x9fc4e8};
   function makeEnemy(color){ const g=new THREE.Group();
     const body=new THREE.Mesh(new THREE.SphereGeometry(0.5,14,12), mat(color,.5)); body.scale.set(1,0.82,1); body.position.y=0.5; body.castShadow=true; g.add(body);
     const eG=new THREE.SphereGeometry(0.14,8,8), ew=new THREE.MeshBasicMaterial({color:0xffffff});
@@ -488,14 +534,46 @@
     const e={mesh:g, plat:p, x:p.x, z:p.z, top:p.top, dir:Math.random()<0.5?-1:1,
       min:p.x-(p.w/2-0.9), max:p.x+(p.w/2-0.9), spd:1.4+Math.random()*1.6, alive:true, t:Math.random()*6};
     g.position.set(e.x,e.top,e.z); scene.add(g); enemies.push(e); p.enemy=e; }
+  // inimigo voador: paira sobre um vão batendo asas — pise para derrotar ou desvie
+  function makeFlyerMesh(color){ const g=new THREE.Group();
+    const body=new THREE.Mesh(new THREE.SphereGeometry(0.4,12,10), mat(color,.55)); body.scale.set(1,0.8,1.1); body.castShadow=true; g.add(body);
+    const eG=new THREE.SphereGeometry(0.11,8,8), ew=new THREE.MeshBasicMaterial({color:0xffffff});
+    const eL=new THREE.Mesh(eG,ew), eR=new THREE.Mesh(eG,ew); eL.position.set(-0.16,0.12,0.32); eR.position.set(0.16,0.12,0.32); g.add(eL,eR);
+    const pm=new THREE.MeshBasicMaterial({color:0x111111}); const pG=new THREE.SphereGeometry(0.055,6,6);
+    const pL=new THREE.Mesh(pG,pm), pR=new THREE.Mesh(pG,pm); pL.position.set(-0.16,0.12,0.4); pR.position.set(0.16,0.12,0.4); g.add(pL,pR);
+    const wG=new THREE.PlaneGeometry(0.62,0.34), wm=new THREE.MeshStandardMaterial({color:0xffffff,transparent:true,opacity:0.75,side:THREE.DoubleSide,roughness:.6});
+    const wL=new THREE.Mesh(wG,wm), wR=new THREE.Mesh(wG,wm);
+    wL.position.set(-0.5,0.18,0); wR.position.set(0.5,0.18,0); g.add(wL,wR); g.userData={wL,wR}; return g; }
+  function addFlyer(x,y,z){ const g=makeFlyerMesh(ENEMY_COL[G.biome.name]||0x9b5de5);
+    const e={type:'flyer', mesh:g, x, z, baseY:y, top:y, alive:true, t:Math.random()*6, amp:0.5+Math.random()*0.4};
+    g.position.set(x,y,z); scene.add(g); enemies.push(e); }
+  function killEnemy(e){ e.alive=false; e.mesh.visible=false; G.vel.y=JUMP_V*0.78; G.onGround=false; G.jumps=0;
+    const ey=e.type==='flyer'? e.top : e.top+0.6;
+    addScore(e.type==='flyer'?80:50,'PISOU!',e.x,ey+0.8,e.z,0xffd54a); burst(e.x,ey,e.z,0xff6b9d,16,5);
+    gShake=Math.max(gShake,0.4); hitStop=0.055; Sfx.jump(); }
   function updateEnemies(dt){ const p=G.player;
     for(const e of enemies){ if(!e.alive)continue; e.t+=dt;
+      if(e.type==='flyer'){
+        e.top = e.baseY + Math.sin(e.t*1.6)*e.amp;
+        e.mesh.position.set(e.x, e.top, e.z);
+        const f=Math.sin(e.t*14)*0.85; e.mesh.userData.wL.rotation.z=f; e.mesh.userData.wR.rotation.z=-f;
+        e.mesh.rotation.y = Math.PI; // olhando para o jogador que vem
+        const dxp=p.x-e.x, dzp=p.z-e.z, dyp=(p.y+0.6)-e.top;
+        if(dxp*dxp+dzp*dzp < 0.9 && Math.abs(dyp)<1.1){
+          if(G.vel.y<0 && p.y > e.top+0.15){ killEnemy(e); }
+          else if(G.invuln<=0){ damage(e.x); }
+        }
+        continue;
+      }
+      // caminhante: patrulha com passinhos e piscada
       e.x+=e.dir*e.spd*dt; if(e.x<e.min){e.x=e.min;e.dir=1;} else if(e.x>e.max){e.x=e.max;e.dir=-1;}
-      e.mesh.position.set(e.x, e.top+Math.abs(Math.sin(e.t*6))*0.09, e.z);
+      const hop=Math.abs(Math.sin(e.t*6))*0.09;
+      e.mesh.position.set(e.x, e.top+hop, e.z);
       e.mesh.rotation.y = e.dir>0? Math.PI*0.5 : -Math.PI*0.5;
+      e.mesh.rotation.z = Math.sin(e.t*6)*0.06;                        // gingado
+      const sc=1+Math.sin(e.t*12)*0.03; e.mesh.scale.set(sc,2-sc,sc);  // respiração/squash
       const dxp=p.x-e.x, dzp=p.z-e.z; if(dxp*dxp+dzp*dzp < 0.95 && Math.abs(p.y-e.top)<1.5){
-        if(G.vel.y<0 && p.y > e.top+0.45){ e.alive=false; e.mesh.visible=false; G.vel.y=JUMP_V*0.78; G.onGround=false; G.jumps=0;
-          addScore(50,'PISOU!',e.x,e.top+1.2,e.z,0xffd54a); burst(e.x,e.top+0.6,e.z,0xff6b9d,16,5); gShake=Math.max(gShake,0.4); Sfx.jump(); }
+        if(G.vel.y<0 && p.y > e.top+0.45){ killEnemy(e); }
         else if(G.invuln<=0){ damage(e.x); }
       } }
   }
@@ -533,7 +611,8 @@
     d.style.color='#'+(colorHex>>>0).toString(16).padStart(6,'0'); el.appendChild(d); setTimeout(()=>d.remove(),850); }
   function updateCombo(dt){ if(gComboT>0){ gComboT-=dt; if(gComboT<=0 && gCombo>0){ gCombo=0; updateHUD(); } } }
   function clearGameplay(){ for(const e of enemies) scene.remove(e.mesh); for(const pd of pads) scene.remove(pd.mesh);
-    for(const m of parts){ m.visible=false; partPool.push(m); } enemies=[]; pads=[]; parts=[]; gCombo=0; gComboT=0; gShake=0; }
+    for(const mv of movers) scene.remove(mv.mesh);
+    for(const m of parts){ m.visible=false; partPool.push(m); } enemies=[]; pads=[]; movers=[]; parts=[]; gCombo=0; gComboT=0; gShake=0; hitStop=0; }
 
   function makePlatform(x,y,z,w,d){
     let m = G.pool.pop();
@@ -556,6 +635,17 @@
       else { const c=new THREE.Mesh(new THREE.SphereGeometry(0.6,10,8), mat(b.foli)); c.position.y=1.1; c.castShadow=true; g.add(c); }
       m=g;
     } else if(kind==='cactus'){ const g=new THREE.Group(); const s=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.18,1.0,7), mat(b.foli)); s.position.y=0.5; s.castShadow=true; g.add(s); m=g; }
+    else if(kind==='stalag'){ const g=new THREE.Group();
+      const c1=new THREE.Mesh(new THREE.ConeGeometry(0.28,1.1,6), mat(b.rock)); c1.position.y=0.55; c1.castShadow=true; g.add(c1);
+      const cr=new THREE.Mesh(new THREE.OctahedronGeometry(0.22,0), new THREE.MeshStandardMaterial({color:0x67e8f9,emissive:0x1e9fb5,emissiveIntensity:.8,roughness:.2,flatShading:true}));
+      cr.position.set(0.3,0.24,0.1); cr.rotation.z=0.5; g.add(cr); m=g; }
+    else if(kind==='column'){ const g=new THREE.Group();
+      const h=0.8+Math.random()*1.0;
+      const col=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.24,h,10), mat(0xcfc0a0,.85)); col.position.y=h/2; col.castShadow=true; g.add(col);
+      const base=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.16,0.6), mat(0xb8a888,.9)); base.position.y=0.08; g.add(base);
+      if(Math.random()<0.6){ const top=new THREE.Mesh(new THREE.BoxGeometry(0.56,0.14,0.56), mat(0xcfc0a0,.85)); top.position.y=h+0.07; g.add(top); } m=g; }
+    else if(kind==='cloudpuff'){ const g=new THREE.Group(); const cm=new THREE.MeshStandardMaterial({color:0xffffff,roughness:1,transparent:true,opacity:0.85});
+      for(let k=0;k<3;k++){ const s=new THREE.Mesh(new THREE.SphereGeometry(0.3+Math.random()*0.25,10,8), cm); s.position.set((k-1)*0.4,0.25+Math.random()*0.15,(Math.random()-0.5)*0.3); g.add(s); } m=g; }
     else { m=new THREE.Mesh(new THREE.DodecahedronGeometry(0.4+Math.random()*0.3,0), mat(b.rock)); m.castShadow=true; }
     m.position.set(x,y,z); m.rotation.y=Math.random()*6.28;
     m.userData.sway = (kind==='rock') ? -1 : Math.random()*6.28;   // árvores/pinheiros/cactos balançam
@@ -566,6 +656,7 @@
   function difficulty(){ return clamp((G.phase-1)/25, 0, 0.82); } // sobe e estabiliza num nível justo
   function genNext(){
     const r=G.rng, c=G.cursor, diff=difficulty();
+    const px0=c.x, py0=c.y, pz0=c.z;   // cursor antes desta plataforma (para o vão)
     const depth = 6 + r()*3;
     const width = clamp(lerp(9,6,diff) + r()*2, 5.5, 11);   // plataformas nunca estreitas demais
     const prevDepth = G.lastPlat ? G.lastPlat.d : 6;
@@ -593,6 +684,16 @@
     // trampolins (bônus) e inimigos — nunca na mesma plataforma; longe do início
     if(z < -24 && width > 7.5 && r() < 0.14) addPad(p);
     if(!p.pad && z < -18 && r() < 0.22 + diff*0.40) addEnemy(p);
+    // plataforma móvel no meio de vãos grandes (ajuda dinâmica, nunca atrapalha)
+    if(z < -20 && gapZ > 3.4 && r() < 0.30){
+      const gapMid = (pz0 - prevDepth/2) - gapZ/2;
+      addMover((px0+nx)/2, Math.min(py0,ny)-0.15, gapMid, r()<0.5?'x':'y');
+    }
+    // criatura voadora sobre um lado da plataforma (dá para desviar pelo outro)
+    if(z < -30 && !p.enemy && r() < 0.10 + diff*0.22){
+      const side = r()<0.5?-1:1;
+      addFlyer(nx + side*width*0.28, ny + 1.5, z + depth*0.15);
+    }
   }
   function ensureAhead(){ while(G.genZ > G.player.z - 90) genNext(); }
   function recycleBehind(){
@@ -602,6 +703,7 @@
     G.decor = G.decor.filter(d=>{ if(d.position.z>backZ){ scene.remove(d); return false; } return true; });
     enemies = enemies.filter(e=>{ if(e.z>backZ){ scene.remove(e.mesh); return false; } return true; });
     pads = pads.filter(pd=>{ if(pd.z>backZ){ scene.remove(pd.mesh); return false; } return true; });
+    movers = movers.filter(mv=>{ if(mv.z>backZ){ scene.remove(mv.mesh); return false; } return true; });
   }
 
   /* ---------- aplicar bioma ---------- */
@@ -613,6 +715,7 @@
     sun.color.setHex(b.sun); sun.intensity=b.si; hemi.color.setHex(b.top); hemi.intensity = b.si*0.7;
     renderer.setClearColor(b.fog);
     configAmbient();
+    if(G.mode==='play') Sfx.ambient(MUSIC_ROOT[b.name]||120);
   }
 
   /* ---------- iniciar / resetar fase ---------- */
@@ -649,10 +752,16 @@
         if(p.top <= feetY+0.35 && (!best || p.top>best.top)) best=p;
       }
     }
+    for(const mv of movers){
+      if(Math.abs(px-mv.x)<=mv.w/2+0.25 && Math.abs(pz-mv.z)<=mv.d/2+0.25){
+        if(mv.top <= feetY+0.35 && (!best || mv.top>best.top)) best=mv;
+      }
+    }
     return best;
   }
   function update(dt){
     const p=G.player;
+    updateMovers(dt);   // antes da colisão, para o suporte ter posição/delta atuais
     // direção desejada (mundo): frente=-Z
     let dx=(input.r-input.l), dz=(input.b-input.f);
     const len=Math.hypot(dx,dz); if(len>1){ dx/=len; dz/=len; }
@@ -676,14 +785,22 @@
     p.x += G.vel.x*dt; p.z += G.vel.z*dt; p.y += G.vel.y*dt;
 
     // colisão vertical com plataformas
+    const impactV = -G.vel.y; // velocidade de queda no momento do toque (para o impacto)
     const support = groundUnder(p.x, p.z, p.y);
-    if(G.vel.y<=0 && support && p.y <= support.top+0.001 && p.y >= support.top-0.6){
+    const snapTol = (support && support.isMover) ? 0.14 : 0.001;  // gruda em mover descendo
+    if(G.vel.y<=0 && support && p.y <= support.top+snapTol && p.y >= support.top-0.6){
       p.y = support.top; G.vel.y=0;
-      if(!G.onGround){ Sfx.land(); G.squash=0.7; burst(p.x,support.top,p.z,0xffffff,7,2.4); }
-      G.onGround=true; G.jumps=0; G.safe.set(support.x, support.top, support.z);
+      if(!G.onGround){ Sfx.land();
+        // impacto proporcional à queda: mais poeira, mais squash, tremida em quedas altas
+        const k=clamp(impactV/22, 0.3, 1.4);
+        G.squash=1-0.38*k; burst(p.x,support.top,p.z,0xffffff, Math.round(5+9*k), 2+2.5*k);
+        if(impactV>16) gShake=Math.max(gShake,0.35); }
+      G.onGround=true; G.jumps=0;
+      if(support.isMover){ p.x += support.dx||0; } else { G.safe.set(support.x, support.top, support.z); }
     } else if(support && G.vel.y<=0 && p.y < support.top && p.y > support.top-1.0){
       // pequeno degrau para cima
-      p.y=support.top; G.vel.y=0; G.onGround=true; G.jumps=0; G.safe.set(support.x,support.top,support.z);
+      p.y=support.top; G.vel.y=0; G.onGround=true; G.jumps=0;
+      if(support.isMover){ p.x += support.dx||0; } else { G.safe.set(support.x,support.top,support.z); }
     } else {
       G.onGround=false;
     }
@@ -708,6 +825,8 @@
     if(G.invuln>0) G.invuln-=dt;
     updateEnemies(dt); updatePads(dt); updateParts(dt); updateCombo(dt);
     if(gShake>0) gShake=Math.max(0, gShake-dt*2.2);
+    // passos ritmados enquanto corre no chão
+    if(G.onGround && Math.hypot(G.vel.x,G.vel.z)>4){ G._stepT=(G._stepT||0)-dt; if(G._stepT<=0){ Sfx.step(); G._stepT=0.26; } }
 
     ensureAhead(); recycleBehind();
 
@@ -736,7 +855,7 @@
     banner('❤ Cuidado com o abismo!');
   }
   function gameOver(){
-    G.mode='over'; Sfx.over();
+    G.mode='over'; Sfx.stopAmb(); Sfx.over();
     const best=+(localStorage.getItem(BEST)||0);
     document.getElementById('ovPhase').textContent=G.phase;
     document.getElementById('ovDist').textContent=Math.floor(G.dist);
@@ -772,7 +891,10 @@
   let acc=0;
   function frame(now){
     let dt=(now-clock.last)/1000; clock.last=now; if(dt>0.1)dt=0.1;
-    if(G.mode==='play'){ acc+=dt; let s=0; while(acc>=STEP && s<5){ update(STEP); acc-=STEP; s++; } }
+    if(G.mode==='play'){
+      if(hitStop>0){ hitStop-=dt; acc=0; }             // congela a física por um instante (impacto)
+      else { acc+=dt; let s=0; while(acc>=STEP && s<5){ update(STEP); acc-=STEP; s++; } }
+    }
     else acc=0;
     if(renderer){ if(G.banT>0){ G.banT-=dt; if(G.banT<=0) document.getElementById('banner').classList.remove('show'); }
       updateLife(dt||0.016); syncMeshes(); updateCamera(dt||0.016); renderer.render(scene,camera); renderPreview(dt||0.016); }
@@ -793,7 +915,7 @@
   const SCR=['scrTitle','scrPause','scrOver','scrChar'];
   function showScreen(id){ SCR.forEach(s=>document.getElementById(s).classList.toggle('show', s===id)); }
   function hideScreens(){ SCR.forEach(s=>document.getElementById(s).classList.remove('show')); }
-  function toMenu(){ G.mode='title'; showScreen('scrTitle'); refreshCont(); }
+  function toMenu(){ G.mode='title'; Sfx.stopAmb(); showScreen('scrTitle'); refreshCont(); }
   function togglePause(){ if(G.mode==='play'){ G.mode='pause'; showScreen('scrPause'); } else if(G.mode==='pause'){ hideScreens(); G.mode='play'; clock.last=performance.now(); } }
   function refreshCont(){ const p=+(localStorage.getItem(PROG)||1); const c=document.getElementById('contBtn'); if(p>1){ c.style.display=''; document.getElementById('contN').textContent=p; } else c.style.display='none'; }
 
@@ -862,7 +984,7 @@
   boot();
 
   // hooks de teste
-  window.__g = { THREE, G, input, startGame, startPhase, genNext, difficulty, biomeForPhase, CHARACTERS, setCharacter, openCharSelect, get ready(){ return !!renderer; } };
+  window.__g = { THREE, G, input, startGame, startPhase, genNext, difficulty, biomeForPhase, CHARACTERS, setCharacter, openCharSelect, get movers(){ return movers; }, get enemies(){ return enemies; }, get ready(){ return !!renderer; } };
   </script>
 </body>
 </html>
