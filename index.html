@@ -78,6 +78,14 @@
     .pop{ position:absolute; transform:translate(-50%,-50%); font-weight:800; font-size:1.05rem; text-shadow:0 2px 8px rgba(0,0,0,.7);
       animation:popUp .85s ease-out forwards; white-space:nowrap; }
     @keyframes popUp{ 0%{ opacity:0; transform:translate(-50%,-50%) scale(.6);} 15%{ opacity:1; transform:translate(-50%,-90%) scale(1.1);} 100%{ opacity:0; transform:translate(-50%,-200%) scale(1);} }
+    .char-stage{ width:min(360px,80vw); height:min(320px,44vh); margin:0 auto .6rem; border-radius:18px; overflow:hidden;
+      background:radial-gradient(ellipse at 50% 30%, rgba(56,189,248,.18), rgba(12,16,24,.0) 70%); border:1px solid var(--border); }
+    .char-stage canvas{ width:100%; height:100%; display:block; }
+    .char-nav{ display:flex; align-items:center; justify-content:center; gap:1rem; margin-bottom:.4rem; }
+    .char-name{ font-weight:800; font-size:1.25rem; min-width:9ch; }
+    .char-dots{ display:flex; justify-content:center; gap:.45rem; margin-bottom:1rem; }
+    .char-dots span{ width:9px; height:9px; border-radius:50%; background:rgba(255,255,255,.2); transition:background .2s, transform .2s; }
+    .char-dots span.on{ background:var(--accent2); transform:scale(1.25); }
   </style>
 </head>
 <body>
@@ -113,11 +121,27 @@
         <p>Um platformer 3D com fases infinitas geradas na hora, iluminação realista e câmera em 3ª pessoa. Salte entre plataformas, colete cristais e vá o mais longe que puder por biomas diferentes.</p>
         <button class="btn" id="playBtn">▶ Jogar</button>
         <button class="btn ghost" id="contBtn" style="display:none">Continuar (Fase <span id="contN">1</span>)</button>
+        <button class="btn ghost" id="charBtn">🧍 Personagem: <span id="charTitleName">Exploradora</span></button>
         <div class="help">
           <span class="kc">W A S D</span> / setas mover &nbsp;•&nbsp; <span class="kc">Espaço</span> pular &nbsp;•&nbsp; <span class="kc">P</span> pausar<br>
           No celular: <b>analógico</b> à esquerda, <b>PULAR</b> à direita
         </div>
         <button class="btn ghost" id="installBtn" style="display:none;margin-top:.6rem">📲 Instalar no celular</button>
+      </div>
+    </div>
+
+    <!-- Seleção de personagem -->
+    <div class="screen" id="scrChar">
+      <div class="box">
+        <h2>Escolha seu <span class="g">herói</span></h2>
+        <div class="char-stage"><canvas id="charCanvas" width="360" height="320"></canvas></div>
+        <div class="char-nav">
+          <button class="btn ghost" id="charPrev">◀</button>
+          <span class="char-name" id="charName">Exploradora</span>
+          <button class="btn ghost" id="charNext">▶</button>
+        </div>
+        <div class="char-dots" id="charDots"></div>
+        <button class="btn" id="charOk">✓ Escolher</button>
       </div>
     </div>
 
@@ -193,7 +217,8 @@
     platforms:[], coins:[], decor:[], pool:[],
     cursor:{x:0,y:0,z:0}, genZ:0, lastPlat:null, safe:new THREE.Vector3(0,0,0),
     hearts:3, coinsN:0, dist:0, maxDist:0, rng:null,
-    banT:0,
+    banT:0, invuln:0,
+    charIndex: +(localStorage.getItem('exp3d.char')||0) % 6,
   };
   const BEST='exp3d.best', PROG='exp3d.prog';
   const input = { f:0, b:0, l:0, r:0, jumpEdge:false, jumpHeld:false };
@@ -237,7 +262,7 @@
     sun.shadow.camera.near=1; sun.shadow.camera.far=120; sun.shadow.bias=-0.0004;
     scene.add(sun); scene.add(sun.target);
 
-    buildPlayer();
+    buildPlayer(CHARACTERS[G.charIndex||0]);
     addEventListener('resize', onResize); onResize();
   }
   function onResize(){ if(!renderer)return; camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); }
@@ -245,23 +270,113 @@
   /* ---------- materiais utilitários ---------- */
   const mat = (c,rough=0.9,metal=0.0,flat=true)=> new THREE.MeshStandardMaterial({ color:c, roughness:rough, metalness:metal, flatShading:flat });
 
-  /* ---------- personagem ---------- */
-  function buildPlayer(){
+  // textura de ruído (grão de terreno) compartilhada — dá realismo às plataformas
+  function makeNoiseTexture(){
+    const s=128, c=document.createElement('canvas'); c.width=c.height=s; const x=c.getContext('2d');
+    x.fillStyle='#8a8a8a'; x.fillRect(0,0,s,s);
+    for(let i=0;i<2600;i++){ const v=110+Math.random()*60; x.fillStyle=`rgb(${v},${v},${v})`;
+      x.fillRect(Math.random()*s, Math.random()*s, 1+Math.random()*2, 1+Math.random()*2); }
+    // manchas suaves
+    for(let i=0;i<40;i++){ const g=x.createRadialGradient(Math.random()*s,Math.random()*s,1,Math.random()*s,Math.random()*s,8+Math.random()*18);
+      const v=100+Math.random()*70; g.addColorStop(0,`rgba(${v},${v},${v},0.35)`); g.addColorStop(1,'rgba(0,0,0,0)'); x.fillStyle=g; x.fillRect(0,0,s,s); }
+    const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(2,2); return t;
+  }
+  let noiseTex=null;
+  function platMaterial(color){ noiseTex=noiseTex||makeNoiseTexture();
+    return new THREE.MeshStandardMaterial({ color, roughness:.95, metalness:0, map:noiseTex }); }
+
+  /* ---------- personagens selecionáveis ---------- */
+  const CHARACTERS = [
+    { name:"Exploradora", skin:0xe8b48c, hair:0x3a2a1e, shirt:0x38bdf8, pants:0x27324a, shoe:0x2a1f16, acc:'cap' },
+    { name:"Ninja",       skin:0x2a2a30, hair:0x111111, shirt:0x1a1a22, pants:0x111118, shoe:0x0a0a0a, acc:'ninja', sash:0xff3b3b },
+    { name:"Robô",        skin:0xc2ccd6, hair:0x8fa0b5, shirt:0x4a6fa5, pants:0x394a5a, shoe:0x2a3542, acc:'robot', glow:0x67e8f9 },
+    { name:"Astronauta",  skin:0xe8b48c, hair:0x3a2a1e, shirt:0xeef3f8, pants:0xdbe3ec, shoe:0xb4bec8, acc:'astro' },
+    { name:"Mago",        skin:0xe8b48c, hair:0xe8e8e8, shirt:0x6b3fa0, pants:0x3a2560, shoe:0x2a1c40, acc:'wizard', hat:0x8b5cf6 },
+    { name:"Cavaleiro",   skin:0xe8b48c, hair:0x5a4a3a, shirt:0x9aa4b0, pants:0x6a7480, shoe:0x4a5460, acc:'knight', plume:0xff5c5c },
+  ];
+
+  function makeCharacterMesh(cfg){
     const g = new THREE.Group();
-    const skin=mat(0xe8b48c,.8), shirt=mat(0x38bdf8,.7), pants=mat(0x27324a,.8), shoe=mat(0x1a1f2b,.6), hair=mat(0x3a2a1e,.9);
+    const skin=mat(cfg.skin,.8, cfg.acc==='robot'?0.4:0), shirt=mat(cfg.shirt,.7, cfg.acc==='knight'?0.5:0), pants=mat(cfg.pants,.8), shoe=mat(cfg.shoe,.6), hair=mat(cfg.hair,.9);
     const torso=new THREE.Mesh(new THREE.BoxGeometry(0.72,0.9,0.42), shirt); torso.position.y=1.5; torso.castShadow=true; g.add(torso);
-    const head=new THREE.Mesh(new THREE.SphereGeometry(0.34,16,12), skin); head.position.y=2.2; head.castShadow=true; g.add(head);
-    const hairM=new THREE.Mesh(new THREE.SphereGeometry(0.36,16,12,0,6.28,0,1.7), hair); hairM.position.y=2.24; g.add(hairM);
+    const head=new THREE.Mesh((cfg.acc==='robot'?new THREE.BoxGeometry(0.6,0.58,0.56):new THREE.SphereGeometry(0.34,16,12)), skin); head.position.y=2.2; head.castShadow=true; g.add(head);
+    // acessórios por personagem
+    const A=cfg.acc;
+    if(A==='cap'){ const h=new THREE.Mesh(new THREE.SphereGeometry(0.36,16,12,0,6.28,0,1.7), hair); h.position.y=2.24; g.add(h);
+      const brim=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.34,0.06,16), shirt); brim.position.set(0,2.3,0.16); g.add(brim); }
+    else if(A==='ninja'){ const band=new THREE.Mesh(new THREE.BoxGeometry(0.72,0.16,0.72), mat(cfg.sash,.6)); band.position.y=2.3; g.add(band);
+      const eyes=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.09,0.02), new THREE.MeshBasicMaterial({color:0xffffff})); eyes.position.set(0,2.2,0.34); g.add(eyes);
+      const tail=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.44,0.09), mat(cfg.sash,.6)); tail.position.set(-0.36,2.16,-0.18); tail.rotation.z=0.7; g.add(tail); }
+    else if(A==='robot'){ const eye=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.1,0.02), new THREE.MeshBasicMaterial({color:cfg.glow})); eye.position.set(0,2.24,0.3); g.add(eye);
+      const ant=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.28,6), mat(0x888888,.4,.6)); ant.position.set(0,2.62,0); g.add(ant);
+      const bulb=new THREE.Mesh(new THREE.SphereGeometry(0.08,10,10), new THREE.MeshBasicMaterial({color:cfg.glow})); bulb.position.set(0,2.8,0); g.add(bulb); }
+    else if(A==='astro'){ const helm=new THREE.Mesh(new THREE.SphereGeometry(0.42,18,14), new THREE.MeshStandardMaterial({color:0xbfe6ff,transparent:true,opacity:0.35,roughness:0.08,metalness:0.1})); helm.position.y=2.2; g.add(helm);
+      const ring=new THREE.Mesh(new THREE.TorusGeometry(0.34,0.05,8,20), mat(0xd8dee6,.5)); ring.position.y=2.2; ring.rotation.x=Math.PI/2; g.add(ring);
+      const pack=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.62,0.24), mat(0xcdd6df,.6)); pack.position.set(0,1.5,-0.34); pack.castShadow=true; g.add(pack); }
+    else if(A==='wizard'){ const hat=new THREE.Mesh(new THREE.ConeGeometry(0.4,0.95,18), mat(cfg.hat,.6)); hat.position.y=2.78; g.add(hat);
+      const brim=new THREE.Mesh(new THREE.CylinderGeometry(0.52,0.52,0.05,18), mat(cfg.hat,.6)); brim.position.y=2.42; g.add(brim);
+      const beard=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.32,0.12), mat(0xe8e8e8)); beard.position.set(0,1.94,0.28); g.add(beard); }
+    else if(A==='knight'){ const helm=new THREE.Mesh(new THREE.SphereGeometry(0.37,16,12), mat(0xb8c0c8,.4,.6)); helm.position.y=2.22; g.add(helm);
+      const visor=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.12,0.06), mat(0x2a2a2a,.4)); visor.position.set(0,2.2,0.32); g.add(visor);
+      const plume=new THREE.Mesh(new THREE.ConeGeometry(0.1,0.42,10), mat(cfg.plume)); plume.position.set(0,2.66,-0.1); g.add(plume); }
+    else { const h=new THREE.Mesh(new THREE.SphereGeometry(0.36,16,12,0,6.28,0,1.7), hair); h.position.y=2.24; g.add(h); }
+    // membros (mesma estrutura para animar)
     function limb(w,h,d,m,px,py){ const pivot=new THREE.Group(); pivot.position.set(px,py,0);
       const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), m); mesh.position.y=-h/2; mesh.castShadow=true; pivot.add(mesh); g.add(pivot); return pivot; }
-    G.armL=limb(0.24,0.82,0.24,shirt,-0.5,1.9); G.armR=limb(0.24,0.82,0.24,shirt,0.5,1.9);
-    // mãos (pele) na ponta dos braços
-    [G.armL,G.armR].forEach(a=>{ const hnd=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.26,0.26),skin); hnd.position.y=-0.82; hnd.castShadow=true; a.add(hnd); });
-    G.legL=limb(0.3,0.95,0.32,pants,-0.2,1.05); G.legR=limb(0.3,0.95,0.32,pants,0.2,1.05);
-    [G.legL,G.legR].forEach(l=>{ const ft=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.2,0.5),shoe); ft.position.set(0,-1.0,0.08); ft.castShadow=true; l.add(ft); });
-    g.position.set(0,0,0);
-    scene.add(g); G.playerMesh=g;
-    G.player = new THREE.Vector3(0,0,0);   // pés (base) do personagem
+    const armL=limb(0.24,0.82,0.24,shirt,-0.5,1.9), armR=limb(0.24,0.82,0.24,shirt,0.5,1.9);
+    [armL,armR].forEach(a=>{ const hnd=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.26,0.26),skin); hnd.position.y=-0.82; hnd.castShadow=true; a.add(hnd); });
+    const legL=limb(0.3,0.95,0.32,pants,-0.2,1.05), legR=limb(0.3,0.95,0.32,pants,0.2,1.05);
+    [legL,legR].forEach(l=>{ const ft=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.2,0.5),shoe); ft.position.set(0,-1.0,0.08); ft.castShadow=true; l.add(ft); });
+    return { g, armL, armR, legL, legR };
+  }
+
+  function buildPlayer(cfg){
+    if(G.playerMesh){ scene.remove(G.playerMesh); }
+    const c = makeCharacterMesh(cfg);
+    G.armL=c.armL; G.armR=c.armR; G.legL=c.legL; G.legR=c.legR;
+    c.g.position.set(0,0,0);
+    scene.add(c.g); G.playerMesh=c.g;
+    if(!G.player) G.player = new THREE.Vector3(0,0,0);   // pés (base) do personagem
+  }
+  function setCharacter(i){ G.charIndex=((i%CHARACTERS.length)+CHARACTERS.length)%CHARACTERS.length;
+    localStorage.setItem('exp3d.char', G.charIndex);
+    const cur=G.player?G.player.clone():null, curFace=G.facing;
+    buildPlayer(CHARACTERS[G.charIndex]);
+    if(cur){ G.playerMesh.position.copy(cur); G.playerMesh.rotation.y=curFace; }
+    const nm=document.getElementById('charName'); if(nm) nm.textContent=CHARACTERS[G.charIndex].name;
+    const tl=document.getElementById('charTitleName'); if(tl) tl.textContent=CHARACTERS[G.charIndex].name;
+    const dots=document.getElementById('charDots');
+    if(dots) [...dots.children].forEach((d,k)=>d.classList.toggle('on', k===G.charIndex)); }
+
+  /* ---------- prévia 3D da seleção de personagem ---------- */
+  let cvR=null, cvScene=null, cvCam=null, cvMesh=null, cvLimbs=null, cvT=0;
+  function openCharSelect(){
+    showScreen('scrChar');
+    const cvs=document.getElementById('charCanvas');
+    if(!cvR){
+      cvR=new THREE.WebGLRenderer({canvas:cvs, antialias:true, alpha:true});
+      cvR.setPixelRatio(Math.min(devicePixelRatio||1,2)); cvR.setSize(cvs.clientWidth||360, cvs.clientHeight||320, false);
+      cvR.outputEncoding=THREE.sRGBEncoding;
+      cvScene=new THREE.Scene();
+      cvCam=new THREE.PerspectiveCamera(40, (cvs.clientWidth||360)/(cvs.clientHeight||320), 0.1, 50);
+      cvCam.position.set(0,2.1,5.6); cvCam.lookAt(0,1.35,0);
+      cvScene.add(new THREE.HemisphereLight(0xbcd8ff, 0x556655, 1.0));
+      const dl=new THREE.DirectionalLight(0xffffff, 1.2); dl.position.set(3,6,4); cvScene.add(dl);
+      const disc=new THREE.Mesh(new THREE.CylinderGeometry(1.5,1.6,0.14,32), mat(0x2a3550,.8)); disc.position.y=-0.07; cvScene.add(disc);
+    }
+    swapPreview();
+  }
+  function swapPreview(){
+    if(cvMesh) cvScene.remove(cvMesh);
+    const c=makeCharacterMesh(CHARACTERS[G.charIndex]);
+    cvMesh=c.g; cvLimbs=c; cvScene.add(cvMesh);
+  }
+  function renderPreview(dt){
+    if(!cvR || !document.getElementById('scrChar').classList.contains('show')) return;
+    cvT+=dt; cvMesh.rotation.y=cvT*0.9;
+    const sw=Math.sin(cvT*5)*0.45;
+    cvLimbs.armL.rotation.x=-sw; cvLimbs.armR.rotation.x=sw; cvLimbs.legL.rotation.x=sw*0.7; cvLimbs.legR.rotation.x=-sw*0.7;
+    cvR.render(cvScene,cvCam);
   }
 
   /* ---------- geometria compartilhada ---------- */
@@ -491,7 +606,7 @@
 
   /* ---------- aplicar bioma ---------- */
   function applyBiome(b){
-    G.biome=b; b._platMat = b._platMat || mat(b.plat,.95);
+    G.biome=b; b._platMat = b._platMat || platMaterial(b.plat);
     if(b.grass && !b._grassMat) b._grassMat = grassMaterial(b.gBase, b.gTip);
     sky.material.uniforms.top.value.setHex(b.top); sky.material.uniforms.bot.value.setHex(b.bot);
     scene.fog.color.setHex(b.fog); scene.fog.density = b.name.includes('Vulc')||b.name.includes('Noturna') ? 0.02 : 0.011;
@@ -660,7 +775,7 @@
     if(G.mode==='play'){ acc+=dt; let s=0; while(acc>=STEP && s<5){ update(STEP); acc-=STEP; s++; } }
     else acc=0;
     if(renderer){ if(G.banT>0){ G.banT-=dt; if(G.banT<=0) document.getElementById('banner').classList.remove('show'); }
-      updateLife(dt||0.016); syncMeshes(); updateCamera(dt||0.016); renderer.render(scene,camera); }
+      updateLife(dt||0.016); syncMeshes(); updateCamera(dt||0.016); renderer.render(scene,camera); renderPreview(dt||0.016); }
     requestAnimationFrame(frame);
   }
 
@@ -675,7 +790,7 @@
     let h=''; for(let i=0;i<Math.max(3,G.hearts);i++) h+= i<G.hearts?'❤':'🖤'; document.getElementById('hearts').textContent=h;
   }
   function banner(txt){ const b=document.getElementById('banner'); b.innerHTML=txt.replace(/Fase (\d+)/,'<span class="g">Fase $1</span>'); b.classList.add('show'); G.banT=1.8; }
-  const SCR=['scrTitle','scrPause','scrOver'];
+  const SCR=['scrTitle','scrPause','scrOver','scrChar'];
   function showScreen(id){ SCR.forEach(s=>document.getElementById(s).classList.toggle('show', s===id)); }
   function hideScreens(){ SCR.forEach(s=>document.getElementById(s).classList.remove('show')); }
   function toMenu(){ G.mode='title'; showScreen('scrTitle'); refreshCont(); }
@@ -719,6 +834,10 @@
   document.getElementById('over2menu').addEventListener('click',toMenu);
   document.getElementById('pause').addEventListener('click',togglePause);
   document.getElementById('mute').addEventListener('click',()=>{ const m=Sfx.toggle(); document.getElementById('mute').textContent=m?'🔇':'🔊'; });
+  document.getElementById('charBtn').addEventListener('click',openCharSelect);
+  document.getElementById('charPrev').addEventListener('click',()=>{ setCharacter(G.charIndex-1); swapPreview(); });
+  document.getElementById('charNext').addEventListener('click',()=>{ setCharacter(G.charIndex+1); swapPreview(); });
+  document.getElementById('charOk').addEventListener('click',()=>{ showScreen('scrTitle'); });
 
   /* ================= PWA ================= */
   let deferred=null;
@@ -733,13 +852,17 @@
     applyBiome(BIOMES[0]);
     startPhase(1,true); G.mode='title';
     document.getElementById('loader').style.display='none';
+    // dots do seletor de personagem
+    const dots=document.getElementById('charDots');
+    CHARACTERS.forEach((_,k)=>{ const s=document.createElement('span'); if(k===G.charIndex)s.classList.add('on'); dots.appendChild(s); });
+    setCharacter(G.charIndex);
     showScreen('scrTitle'); refreshCont();
     requestAnimationFrame(frame);
   }
   boot();
 
   // hooks de teste
-  window.__g = { THREE, G, input, startGame, startPhase, genNext, difficulty, biomeForPhase, get ready(){ return !!renderer; } };
+  window.__g = { THREE, G, input, startGame, startPhase, genNext, difficulty, biomeForPhase, CHARACTERS, setCharacter, openCharSelect, get ready(){ return !!renderer; } };
   </script>
 </body>
 </html>

@@ -21,6 +21,8 @@ você avança de fase e o cenário muda de bioma; a dificuldade sobe e estabiliz
 - **Fases infinitas procedurais** deterministas (a Fase N é sempre igual), sempre transponíveis: a distância
   combinada (lacuna + desvio lateral) nunca excede a envoltória do pulo — verificado geometricamente da
   Fase 1 à 100 (zero saltos fora do alcance)
+- **6 personagens jogáveis** (Exploradora, Ninja, Robô, Astronauta, Mago e Cavaleiro) com tela de
+  seleção 3D (prévia girando) e escolha salva no navegador
 - **Desafio e recompensa:** inimigos que patrulham as plataformas (**pise na cabeça** para derrotá-los e
   ganhar pontos, ou desvie), **trampolins** que te lançam para colunas de **cristais bônus**, e um sistema
   de **combo + pontuação** com números que sobem na tela
